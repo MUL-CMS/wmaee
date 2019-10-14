@@ -25,7 +25,6 @@ from threading import Thread
 DEFAULT_CONFIG = 'defaults.json'
 EXERCISE_DIRECTORY='cms-exercise'
 POTENTIAL_ARCHIVES = {}
-DEFAULT_CONFIG = 'defaults.json'
 DEFAULT_POTENTIALS = {}
 __VASP_PREAMBLE = [
     'source /export/opt/intel/bin/compilervars.sh intel64',
@@ -37,6 +36,9 @@ __VASP_PREAMBLE = [
     'export LD_LIBRARY_PATH=${VASP_ROOT}-dynamic:${MPICH_ROOT}/lib:${FFTW_ROOT}/lib:${LD_LIBRARY_PATH}'
 ]
 
+
+__VASP_COMMAND = 'mpirun -np {tasks} /calc/dholec/Software/centos72/vasp.5.4.1-pavel-mpich-ifort-dynamic/bin/vasp_std'
+# Uncomment this section in order to configure the module for the use on "mul-hpc"
 #__VASP_PREAMBLE = [
 #    'module purge',
 #    'module load intel',
@@ -45,8 +47,7 @@ __VASP_PREAMBLE = [
 #    'module load scalapack/2.0.2',
 #    'ulimit -s unlimited'
 #]
-
-__VASP_COMMAND = 'mpirun -np {tasks} /calc/dholec/Software/centos72/vasp.5.4.1-pavel-mpich-ifort-dynamic/bin/vasp_std'
+#__VASP_COMMAND = 'mpirun -np {tasks} /calc/dnoeger/software/vasp-intel-mvapich2-mkl/5.4.1/bin/vasp_std'
 __END_MARK__ = '__VASP_FINISHED__'
 
 
@@ -57,6 +58,11 @@ def ase_to_pymatgen(atoms):
     return AseAtomsAdaptor.get_structure(atoms)
 
 def remove_white(string):
+    """
+    Removes all whitespaces in a given string
+    :param string: (str) the string
+    :return: (str) a copy without whitespaces
+    """
     whitespace = [' ', '\t', '\n']
     mystr = str(string)
     for removal in whitespace:
