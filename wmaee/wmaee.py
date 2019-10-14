@@ -891,6 +891,11 @@ class VASPOutput(LoggerMixin):
 
     @classmethod
     def create(cls, vasprun):
+        """
+        Creates a instance of an VASPOutput object
+        :param vasprun: (pymatgen.io.vasp.Vasprun) the parsed XML data of the run
+        :return:
+        """
         if not isinstance(vasprun, Vasprun):
             raise TypeError(type(vasprun))
         return VASPOutput(cls.__create_key, vasprun)
@@ -980,9 +985,18 @@ class VASPOutput(LoggerMixin):
     @property
     def eigenvalues(self):
         return self._vasprun.eigenvalues
+
+    @staticmethod
+    def from_directory(directory=None):
+        return parse_output(directory=directory)
     
 
 def parse_output(directory=None):
+    """
+    Parses the output from VASP. Searches for 'vasprun.xml' file
+    :param directory: (str or working_directory) the directory where the output files are located (default: None)
+    :return: (VASPOutput) the VASPOutput object
+    """
     if directory is None:
         directory = working_directory(getcwd())
     
@@ -1006,6 +1020,13 @@ def full_run(inp, directory=None, cpus=2, show_output=True):
         raise RuntimeError('VASP crashed')
 
 def plot_total_dos(output, efermi=False, erange=None):
+    """
+    Plot the total density of states from a given output.
+    :param output: (VASPOutput) the instance of VASPOutput
+    :param efermi: (bool) weth to rescale the x-axis such that the Fermi level is zero (default: False)
+    :param erange: (float, float) the energy range to clip the plot. If None the whole range will be used (default: None)
+    :return: (plotly.graph_objects.Figure) the plot
+    """
     # Non spin polarized case
     dos = output.total_dos
     fig = Figure()
@@ -1030,7 +1051,18 @@ def plot_total_dos(output, efermi=False, erange=None):
         fig.update_xaxes(range=erange)
     return fig
 
-def plot_partial_dos(output, combine_spins=False, efermi=False, orbitals=None, sum_density=True, combine_orbitals=None, erange=None):
+def plot_projected_dos(output, combine_spins=False, efermi=False, orbitals=None, sum_density=True, combine_orbitals=None, erange=None):
+    """
+    Plot the projected density of states
+    :param output: (VASPOutput) the VASP output object
+    :param combine_spins: (bool) wether to sum up the up and down spin density for spin polarized calculations (default: False)
+    :param efermi: (bool) wether to rescale the x-axis such that the Fermi level is zero (default: False)
+    :param orbitals: (list or tuple of str) which orbitals to display e.g ('s', 'p', 'd') or ('px', 'py'). None means all (default: None)
+    :param sum_density: (bool) wether to sum up the densities for the individual orbital
+    :param combine_orbitals:
+    :param erange: (float, float) the energy range to clip the plot. If None the whole range will be used (default: None)
+    :return: (plotly.graph_objects.Figure) the plot
+    """
     pdos = output.partial_dos[-1]
     energies = output.total_dos.energies
     energies = energies if not efermi else energies - output.total_dos.efermi
@@ -1058,7 +1090,6 @@ def plot_partial_dos(output, combine_spins=False, efermi=False, orbitals=None, s
             for s,d in density:
                 figure_data.append(dict(x=energies, y=d, name='{}-{}'.format(orbital.name, s.name), orbital=orbital, spin=s))
                 sd.append((s,d))
-    combined_figure_data = []
     if combine_orbitals is not None:
         combinations = []
         

@@ -1,6 +1,6 @@
 # This is to hide moudle data
 # plotting functions
-from .wmaee import plot_partial_dos, plot_total_dos
+from .wmaee import plot_projected_dos, plot_total_dos
 #utility functions
 from .wmaee import view, ase_to_pymatgen, pymatgen_to_ase, working_directory
 
