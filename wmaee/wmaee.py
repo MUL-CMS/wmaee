@@ -52,9 +52,19 @@ __END_MARK__ = '__VASP_FINISHED__'
 
 
 def pymatgen_to_ase(structure):
+    """
+    Converts a `pymatgen.Structure` object to a `ase.Atoms` object
+    :param structure: (pymatgen.Structure) the structure to convert
+    :return: (ase.Atom) the converted object
+    """
     return AseAtomsAdaptor.get_atoms(structure)
 
 def ase_to_pymatgen(atoms):
+    """
+     Converts  a `ase.Atoms` object to a `pymatgen.Structure` object
+    :param atoms: (ase.Atom) the structure to convert
+    :return: (pymatgen.Structure) the converted object
+    """
     return AseAtomsAdaptor.get_structure(atoms)
 
 def remove_white(string):
@@ -70,6 +80,11 @@ def remove_white(string):
     return mystr
 
 def potcar_from_string(string):
+    """
+    Parses a string and creates a pymatgen.io.vasp.Potcar object from it
+    :param string: (str) the path to the POTCAR file
+    :return: (pymagen.io.vasp.Potcar) the Potcar object
+    """
     fdata = string
 
     potcar = Potcar()
@@ -89,16 +104,25 @@ def potcar_from_string(string):
 
 class StringStream(StringIO):
     """
-
+    A class representing a dummy stream, which can be used to write data to and read from it
     """
 
     def __init__(self, string=''):
+        """
+        Create a string stream with a initial value
+        :param string: (str) the initial value (default: "")
+        """
         super(StringStream, self).__init__(initial_value=string)
         self._pos = 0
         self._remaining = 0
         self._length = 0
 
     def read(self, size=-1):
+        """
+        Performs a read operation on the StringStream object. Blocks if not enough data is available
+        :param size: (int) number of characters to be read from the stream (default: -1)
+        :return: (str) data read from the StringStream object
+        """
         while self._remaining < size:
             sleep(0.01)
         result = super(StringStream, self).read()
@@ -111,6 +135,10 @@ class StringStream(StringIO):
         return result
 
     def write(self, s):
+        """
+        Write data to the StringStream object
+        :param s: (str) the data
+        """
         write_length = len(s)
         super(StringStream, self).write(s)
         # After write file is at the end
@@ -119,6 +147,12 @@ class StringStream(StringIO):
         self._remaining = self._length - self._pos
 
     def readline(self, size=-1, block=True):
+        """
+        Reads a line from the StringStream object. Block if not a full line is available
+        :param size: (int) number of characters to read (default: -1)
+        :param block: (bool) wether to block until  a line is available (default: True)
+        :return: (str) the data read from the StringStream object
+        """
         if self.tell() != self._pos:
             self.seek(self._pos)
         result = super(StringStream, self).readline()
@@ -136,10 +170,17 @@ class StringStream(StringIO):
 
 
 def _get_configuration_directory():
+    """
+    Build the path the to configuration directory for this module
+    :return: (str) the absolute path of the configuration directory
+    """
     import getpass
     return '/calc/{USER}/{DATA}/.config'.format(USER=getpass.getuser(), DATA=EXERCISE_DIRECTORY)
 
 def greet():
+    """
+    Greets the students, participating in the exercises
+    """
     print('Herzlich willkommen zu den Übungen zu Werkstoffmodellierung auf atomarer Ebene (DFT-Teil). Es freut uns, dass du da bist!')
     print('Welcome to the exercises of the lecture Materials Modelling on Atomistic Scals. We\'re happy to have you here!')
 
@@ -166,12 +207,23 @@ class LoggerMixin(object):
     
 class working_directory(object):
 
+    """
+    A convenience class which syntactic sugar, allowing the user to change the directories.
+    Can also be nested.
+    """
+
     def __init__(self, name=None, prefix=None, delete=False):
+        """
+        Constructs a working_directory object
+        :param name: (str) name of the directory if None is given os.getcwd() will be used (default: None)
+        :param prefix: (str) a prefix where to locate the directory (default: None)
+        :param delete: (bool) wether to delete the directory after a with clause (default: False)
+        """
         self._name = str(uuid4()) if not name else name
         self._delete = delete
         self._curr_dir = getcwd()
         self._active = False
-        if prefix:
+        if prefix is not None:
             self._name = join(prefix, self._name)
 
     def __enter__(self):
@@ -195,6 +247,18 @@ class working_directory(object):
         return self._active
     
 def view(structure, spacefill=True, show_cell=True, camera='perspective', particle_size=0.5, background='white', color_scheme='element', show_axes=True):
+    """
+    Constructs a nglview view to display a structure
+    :param structure: (pymatgen.Structure, ase.Atoms) the structure to display
+    :param spacefill: (bool) to set the atoms size to spacefilling (default: True)
+    :param show_cell:  (bool) wether to draw the unit cell or not (default: True)
+    :param camera: (str) which camera projections to use 'perspective' or 'orthographic' (default: 'perspective')
+    :param particle_size: (float) the size of the atoms (default: 0.5)
+    :param background: (str) the name of the background color (default: 'white')
+    :param color_scheme: (str) the name of the coloring scheme. Please refer to nglview documentation (default: 'element')
+    :param show_axes: (bool) wether to draw the coordinate system of the unit cell (default: True)
+    :return: (nglview.View) view wrapper
+    """
     try:
         import nglview
     except ImportError:
@@ -227,13 +291,20 @@ def view(structure, spacefill=True, show_cell=True, camera='perspective', partic
     return view_
 
 class PotentialException(Exception):
+    """
+    A class to indicate that there is a Exception with POTCAR files
+    """
     def __init__(self, msg):
         super(PotentialException, self).__init__(msg)
 
         
 class ThreadWithReturnValue(Thread):
+    """
+    Small wraper around threading.Thread which stores the return value of the executed function
+    """
+
     def __init__(self, group=None, target=None, name=None,
-                 args=(), kwargs={}, Verbose=None):
+                 args=(), kwargs={}):
         Thread.__init__(self, group, target, name, args, kwargs)
         self._return = None
 
@@ -248,6 +319,9 @@ class ThreadWithReturnValue(Thread):
 
 
 class PotentialArchive(LoggerMixin):
+    """
+    A class to work with VASP POTCAR potential archives
+    """
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, path, xc_func='gga'):
@@ -294,6 +368,11 @@ class PotentialArchive(LoggerMixin):
         """docstring"""
 
     def default_potential(self, element):
+        """
+        Returns the default POTCAR identifier as specified in "defaults.json"
+        :param element: (str) the element a potential is needed for
+        :return: (str) the identifier of the potential
+        """
         global DEFAULT_POTENTIALS
         if element not in DEFAULT_POTENTIALS[self.xc_func]:
             raise PotentialException('No default potential configured for element "{}" for xc_type="{}"'
@@ -303,6 +382,10 @@ class PotentialArchive(LoggerMixin):
 
 
 class TarPotentialArchive(PotentialArchive):
+    """
+    Representes a POTCAR database packed in a tar.gz archive as obtained from the VASP webpage
+    """
+
     def __init__(self, path):
         super(TarPotentialArchive, self).__init__(path)
         if not isfile(path):
@@ -387,6 +470,9 @@ class TarPotentialArchive(PotentialArchive):
             return None
 
 def _make_potential_archives():
+    """
+    Loads the default POTCAR table for all XC functionals configured
+    """
     global POTENTIAL_ARCHIVES, DEFAULT_POTENTIALS
     default_potential_config = join(_get_configuration_directory(), DEFAULT_CONFIG)
     with open(default_potential_config, 'rb') as default_potential_config_file:
@@ -429,6 +515,11 @@ def _make_potential_archives():
                                                                                    functional_potential_directory)))
 
 def _extract_species(poscar):
+    """
+    Extracts the correct order of the elements as Specified in the POSCAR to construct a POTCAR file
+    :param poscar: (pymatge.io.vasp.Poscar) Poscar object from which to extract the elements names
+    :return: (list of str) a list of the species names in the structure
+    """
     from pymatgen.core.periodic_table import Element
     with StringIO(poscar.get_string()) as poscar:
         # Skip the first 5 lines
@@ -446,6 +537,12 @@ def _extract_species(poscar):
 
 
 def _construct_potcar(poscar, xc_func='gga'):
+    """
+
+    :param poscar: (pymatgen.io.vasp.Poscar) the Poscar object for which the Potcar should be created
+    :param xc_func: (str) the name of the xc functional (as configure) (default: 'gga')
+    :return: (pymatgen.io.vasp.Potcar) Potcar instance representing the corresponding POTCAR file
+    """
     if xc_func == 'pbe':
         xc_func = 'gga'
     archive = POTENTIAL_ARCHIVES[xc_func]
@@ -467,10 +564,23 @@ def _construct_potcar(poscar, xc_func='gga'):
 
 
 def _shell_alive(shell_handle):
+    """
+    Thest wether a shell is still open
+    :param shell_handle: (subprocess.Popen) the process handle
+    :return: (bool) a boolean flag indicating if the shell is still opened
+    """
     return shell_handle and not isinstance(shell_handle.poll(), int)
 
 
 def _send_command(shell, cmd, return_stdout=False, propagate_stdout=True):
+    """
+    Execute a command on a system shell and return the output
+    :param shell: (subprocess.Popen, subprocess.PIPE, subprocess.PIPE, StringStream) the process handles and output pipes
+    :param cmd: (str) the command to execute
+    :param return_stdout: (bool) wether to return the commands output (default: False)
+    :param propagate_stdout: (bool) wether to send the commands output to the shell_output pipe (default: True)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
     shell_handle, shell_stdin, shell_stdout, shell_output = shell
     shell_input = shell_stdin
     if not _shell_alive(shell_handle):
@@ -509,6 +619,13 @@ def _send_command(shell, cmd, return_stdout=False, propagate_stdout=True):
 
     
 def _read_output(shell, log_file, show_output):
+    """
+    Reads the output of until __END_MARK__ is reached, terminates by returning the exit code
+    :param shell: (subprocess.PIPE or StringStream) the shell output handle
+    :param log_file: (file) the filehandle to the log file
+    :param show_output: (bool) wether to print the output to sys.stdout
+    :return: (int) the exitcode
+    """
     _, _, _, f = shell
     line = f.readline()
     log_file.write(line)
@@ -534,6 +651,16 @@ def _read_output(shell, log_file, show_output):
 
 
 def _write_input(structure, incar, kpoints=None, potcar=None, directory=None, xc_func='gga', delete=False):
+    """
+    Writes input files for a VASP calculations
+    :param structure: (ase.Atoms or pymatgen.Structure or str or pymatgen.io.vasp.Poscar) the structure to use in the calculation
+    :param incar: (pymatgen.io.vasp.Incar or dict) the incar file
+    :param kpoints: (pymatgen.io.vasp.Kpoints) the Kpoints instance. If None a Gamma Point k-mesh is used (default: None)
+    :param potcar: (pymatgen.io.vasp.Potcar) the Potcar instance. If None a instance will be created automatically (default: None)
+    :param directory: (str of working_directory) the directory where to run the calculations. If None os.getcwd() will be used (default: None)
+    :param xc_func: (str) the name of the XC functional
+    :param delete: (bool) will be passed on to the working_directory instance
+    """
     logger = logging.getLogger('VASPRunner')
     if directory is None:
         directory = working_directory(getcwd())
@@ -569,7 +696,7 @@ def _write_input(structure, incar, kpoints=None, potcar=None, directory=None, xc
             incar = Incar.from_file(incar)
         
         if kpoints is None:
-            logger.warn('No KPOINTS file was provided. That\'s not recommended. I\'ll proceed with a Gamma-Point only mesh')
+            logger.warning('No KPOINTS file was provided. That\'s not recommended. I\'ll proceed with a Gamma-Point only mesh')
             kpoints = Kpoints.gamma_automatic((1,1,1))
             
         if isinstance(kpoints, str):
@@ -582,6 +709,15 @@ def _write_input(structure, incar, kpoints=None, potcar=None, directory=None, xc
     
 
 def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=False):
+    """
+    Call VASP programm and obtain the output, by executing the contents of __VASP_PREAMBLE and __VASP_COMMAND in
+    bash subprocess and piping the output
+    :param directory: (str or working_directory) the directory where to execute vasp
+    :param cpus: (int) the number of core used to run the VASP subprocess (default: 2)
+    :param show_output: (bool) wether to print the output on sys.stdout, passed on to _read_output (default: True)
+    :param return_stdout: (bool) wether to return the output as a list of strings. Passed on to _send_command (default: False)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
     logger = logging.getLogger('VASPRunner')
     shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE)
     shell_stdin = TextIOWrapper(shell_handle.stdin, encoding='utf-8')
@@ -620,7 +756,7 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
             exitcode = output
         
         if not exitcode:
-            logger.warn('VASP did not execute successfully! Exit-Code: "{}"'.format(exitcode))
+            logger.warning('VASP did not execute successfully! Exit-Code: "{}"'.format(exitcode))
             return
         
         return exitcode if not return_stdout else (exitcode, output)
@@ -629,10 +765,19 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
 _make_potential_archives()
 
 
-
 class VASPInput(LoggerMixin):
+    """
+    A class to represent and write the input data needed by VASP.
+    """
     
     def __init__(self, incar, structure, kpoints, potcar=None, xc_func='gga'):
+        """
+        :param incar: (pymatgen.io.vasp.Incar or dict or str) the incar file
+        :param structure: (ase.Atoms or pymatgen.Structure or str or pymatgen.io.vasp.Poscar) the structure to use in the calculation
+        :param kpoints: (pymatgen.io.vasp.Kpoints or str) the Kpoints instance. If None a Gamma Point k-mesh is used (default: None)
+        :param potcar: (pymatgen.io.vasp.Potcar or str) the Potcar instance. If None a instance will be created automatically (default: None)
+        :param xc_func: (str) the name of the XC functional
+        """
         super(VASPInput, self).__init__()
         self._incar = incar
         self._structure = structure
@@ -682,11 +827,20 @@ class VASPInput(LoggerMixin):
         self._structure = value
         
     def write(self, directory=None):
+        """
+        Writes the input data to a certain directory
+        :param directory: (str or working_directory) the directory where the input files are written to (default: None)
+        """
         directory = directory if directory is not None else working_directory(getcwd())
         _write_input(self._structure, self._incar, kpoints=self._kpoints, potcar=self._potcar, xc_func=self._xc_func, directory=directory)
         
     @staticmethod
     def from_directory(directory=None):
+        """
+        Parses the input data from a given directory. Useful to use a previous calculations
+        :param directory: (str or working_directory) the directory where the input files are located (default: None)
+        :return: (VASPInput) the object containing the parsed data
+        """
         if directory is None:
             directory = getcwd()
         directory = directory if isinstance(directory, working_directory) else working_directory(directory)
@@ -703,11 +857,34 @@ class VASPInput(LoggerMixin):
             )
     
 def write_input(inp, directory=None):
+    """
+    Write a VASP input to a directory. Is equivalent to `inp.write(directory)`
+    :param inp: (VASPInput) the VASPInput object
+    :param directory: (str or working_directory) the directory where the input files are written to (default: None)
+    """
     _write_input(inp.structure, inp.incar, kpoints=inp.kpoints, potcar=inp.potcar, xc_func=inp.xc_func, directory=directory)
 
 def vasp(directory=None, cpus=2, show_output=True, return_stdout=False):
+    """
+    Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
+    will be executed on os.getcwd() directory
+    :param directory: (str or working_directory) the directory where to execute vasp
+    :param cpus: (int) the number of core used to run the VASP subprocess (default: 2)
+    :param show_output: (bool) wether to print the output on sys.stdout, passed on to _read_output (default: True)
+    :param return_stdout: (bool) wether to return the output as a list of strings. Passed on to _send_command (default: False)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
+    if cpus < 0:
+        cpus = 1
+    elif cpus > 6:
+        cpus = 6
+        logging.getLogger('VASPRunner').warning('Since you have to share our nodew with you colleagues we limited the maximum number of core to six!\n'
+                                                'Weil Ihr euch die Systemrssourcen teilen müsst, haben wir die Anzahl der maximalen Kerne pro Job auf sechs limitiert!')
+    else:
+        cpus = cpus
     return _run_vasp_internal(directory=directory, cpus=cpus, show_output=show_output, return_stdout=return_stdout)
-    
+
+
 class VASPOutput(LoggerMixin):
 
     __create_key = str(uuid4())
