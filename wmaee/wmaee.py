@@ -50,6 +50,13 @@ __VASP_COMMAND = 'mpirun -np {tasks} /calc/dholec/Software/centos72/vasp.5.4.1-p
 #__VASP_COMMAND = 'mpirun -np {tasks} /calc/dnoeger/software/vasp-intel-mvapich2-mkl/5.4.1/bin/vasp_std'
 __END_MARK__ = '__VASP_FINISHED__'
 
+def _get_configuration_directory():
+    """
+    Build the path the to configuration directory for this module
+    :return: (str) the absolute path of the configuration directory
+    """
+    import getpass
+    return '/calc/{USER}/{DATA}/.config'.format(USER=getpass.getuser(), DATA=EXERCISE_DIRECTORY)
 
 def pymatgen_to_ase(structure):
     """
@@ -168,14 +175,6 @@ class StringStream(StringIO):
         #        sleep(0.025)
         return result
 
-
-def _get_configuration_directory():
-    """
-    Build the path the to configuration directory for this module
-    :return: (str) the absolute path of the configuration directory
-    """
-    import getpass
-    return '/calc/{USER}/{DATA}/.config'.format(USER=getpass.getuser(), DATA=EXERCISE_DIRECTORY)
 
 def greet():
     """
@@ -967,7 +966,7 @@ class VASPOutput(LoggerMixin):
             
     @property
     def final_free_energy(self):
-        return self.ionic_steps['e_fr_energy']
+        return self.ionic_step[-1]]['e_fr_energy']
     
     @property
     def free_energies(self):
