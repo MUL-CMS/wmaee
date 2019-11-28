@@ -55,8 +55,14 @@ def _get_configuration_directory():
     Build the path the to configuration directory for this module
     :return: (str) the absolute path of the configuration directory
     """
-    import getpass
-    return '/calc/{USER}/{DATA}/.config'.format(USER=getpass.getuser(), DATA=EXERCISE_DIRECTORY)
+    import os
+    if 'WMAEE_CONFIG_DIR' not in os.environ:
+        if exists('.config'):
+            return join(os.getcwd(), '.config')
+        else:
+            raise RuntimeError('No configuration directory found')
+    else:
+        return os.environ['WMAEE_CONFIG_DIR']
 
 def pymatgen_to_ase(structure):
     """
@@ -966,7 +972,7 @@ class VASPOutput(LoggerMixin):
             
     @property
     def final_free_energy(self):
-        return self.ionic_step[-1]]['e_fr_energy']
+        return self.ionic_step[-1]['e_fr_energy']
     
     @property
     def free_energies(self):
