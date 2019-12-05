@@ -4,7 +4,7 @@ import logging
 import tarfile
 import json
 from wmaee.extensions.common import LoggerMixin, remove_white
-from os.path import isfile, join, isdir
+from os.path import isfile, join, isdir, exists
 from os import listdir
 from io import StringIO
 from shutil import copyfileobj
@@ -12,6 +12,22 @@ from tempfile import NamedTemporaryFile
 
 from pymatgen.io.vasp import Potcar, PotcarSingle
 
+DEFAULT_CONFIG = 'defaults.json'
+POTENTIAL_ARCHIVES = {}
+DEFAULT_POTENTIALS = {}
+def _get_configuration_directory():
+    """
+    Build the path the to configuration directory for this module
+    :return: (str) the absolute path of the configuration directory
+    """
+    import os
+    if 'WMAEE_CONFIG_DIR' not in os.environ:
+        if exists('.config'):
+            return join(os.getcwd(), '.config')
+        else:
+            raise RuntimeError('No configuration directory found')
+    else:
+        return os.environ['WMAEE_CONFIG_DIR']
 
 class PotentialException(Exception):
     """
@@ -182,7 +198,6 @@ def _make_potential_archives():
     Loads the default POTCAR table for all XC functionals configured
     """
     global POTENTIAL_ARCHIVES, DEFAULT_POTENTIALS
-    from wmaee.wmaee import _get_configuration_directory, DEFAULT_CONFIG
     default_potential_config = join(_get_configuration_directory(), DEFAULT_CONFIG)
     with open(default_potential_config, 'rb') as default_potential_config_file:
         default_potentials = json.load(default_potential_config_file)

@@ -1,6 +1,6 @@
 # Forward utility functions and classes
 __author__ = 'Dominik Gehringer'
-from os.path import exists, join
+from os.path import exists
 from os import getcwd
 from pymatgen.io.vasp import Incar, Kpoints, Poscar, Potcar, Vasprun
 from uuid import uuid4
@@ -11,15 +11,10 @@ from ase import Atoms
 from pymatgen import Structure
 from wmaee.extensions.common import working_directory, LoggerMixin
 from wmaee.extensions.potentials import construct_potcar
-import numpy as np
 import logging
 import shlex
 
 
-DEFAULT_CONFIG = 'defaults.json'
-EXERCISE_DIRECTORY='cms-exercise'
-POTENTIAL_ARCHIVES = {}
-DEFAULT_POTENTIALS = {}
 __VASP_PREAMBLE = [
     'source /export/opt/intel/bin/compilervars.sh intel64',
     'ulimit -s unlimited',
@@ -44,19 +39,6 @@ __VASP_COMMAND = 'mpirun -np {tasks} /calc/dholec/Software/centos72/vasp.5.4.1-p
 #__VASP_COMMAND = 'mpirun -np {tasks} /calc/dnoeger/software/vasp-intel-mvapich2-mkl/5.4.1/bin/vasp_std'
 __END_MARK__ = '__VASP_FINISHED__'
 
-def _get_configuration_directory():
-    """
-    Build the path the to configuration directory for this module
-    :return: (str) the absolute path of the configuration directory
-    """
-    import os
-    if 'WMAEE_CONFIG_DIR' not in os.environ:
-        if exists('.config'):
-            return join(os.getcwd(), '.config')
-        else:
-            raise RuntimeError('No configuration directory found')
-    else:
-        return os.environ['WMAEE_CONFIG_DIR']
 
 def pymatgen_to_ase(structure):
     """
