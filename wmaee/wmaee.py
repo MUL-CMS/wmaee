@@ -9,7 +9,7 @@ from io import TextIOWrapper
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase import Atoms
 from pymatgen import Structure
-from wmaee.extensions.common import working_directory, LoggerMixin
+from wmaee.extensions.common import working_directory, LoggerMixin, StringStream
 from wmaee.extensions.potentials import construct_potcar
 import logging
 import shlex
