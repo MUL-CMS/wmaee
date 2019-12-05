@@ -1,9 +1,10 @@
 # This is to hide moudle data
 # plotting functions
-from .wmaee import plot_projected_dos, plot_total_dos
+from .extensions.common import working_directory, tqdm
+from .extensions.vis import view
 from plotly.graph_objects import Figure, Scatter, Contour
 #utility functions
-from .wmaee import view, ase_to_pymatgen, pymatgen_to_ase, working_directory
+from .wmaee import ase_to_pymatgen, pymatgen_to_ase, working_directory
 
 # VASP related stuff
 from .wmaee import full_run, vasp, write_input, VASPInput, parse_output
