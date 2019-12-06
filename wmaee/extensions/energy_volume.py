@@ -18,7 +18,7 @@ def energy_volume_curve(name, structure, deltas=None, incar=None, kpoints=None, 
 
     :param name: (str) the name if the folder where to locate the data
     :param structure: (pymatgen.Structure or ase.Atoms) the structure
-    :param deltas: (list, tuple or np.array) the magnitude of the hydrostatic strains (default: linspace(-0.1, 0.1,10))
+    :param deltas: (list, tuple or np.array) the magnitude of the hydrostatic strains (default: linspace(-0.05, 0.05,10))
     :param delta: (pymatgen.io.vasp.Kpoints) a KPOINTS definition to use (default: Kpoints.automatic_density_by_vol(32000))
     :param incar: (pymatgen.io.vasp.Incar) a INCAR definition to use
     :param show_output: (bool) wether to show VASP output or not
@@ -42,7 +42,7 @@ def energy_volume_curve(name, structure, deltas=None, incar=None, kpoints=None, 
         kpoints = Kpoints.automatic_density_by_vol(32000)
 
     if deltas is None:
-        deltas = np.linspace(-0.1, 0.1, 10)
+        deltas = np.linspace(-0.05, 0.05, 10)
 
     hydrostatic_strain = lambda delta: np.eye(3) * delta
     folder_name = lambda seq: 'strain-%i' % seq
