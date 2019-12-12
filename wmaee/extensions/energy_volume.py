@@ -1,8 +1,9 @@
 import os
 import numpy as np
-from wmaee.wmaee import ase_to_pymatgen, working_directory as folder, full_run, VASPInput, parse_output
+from wmaee.core.common import tqdm, working_directory as folder
+from wmaee.vasp import VASPInput, parse_output, full_run
+from wmaee.utils import ase_to_pymatgen
 from wmaee.extensions.elasticity import apply_strain
-from wmaee.extensions.common import tqdm
 from pymatgen.io.vasp import Incar, Kpoints
 from ase import Atoms
 from os.path import join, exists

@@ -1,5 +1,6 @@
 from ase import Atoms
 from pymatgen import Structure
+from wmaee.utils import pymatgen_to_ase
 
 def view(structure, spacefill=True, show_cell=True, camera='perspective', particle_size=0.5, background='white', color_scheme='element', show_axes=True):
     """
@@ -14,7 +15,6 @@ def view(structure, spacefill=True, show_cell=True, camera='perspective', partic
     :param show_axes: (bool) wether to draw the coordinate system of the unit cell (default: True)
     :return: (nglview.View) view wrapper
     """
-    from wmaee.wmaee import pymatgen_to_ase
     try:
         import nglview
     except ImportError:
