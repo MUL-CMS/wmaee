@@ -20,6 +20,7 @@ this. The file is available on `smmpmech` cluster (`/calc/dnoeger/software/defau
 ```bash
 .config/
 ├── defaults.json
+├── application.json
 ├── gga
 │   └── potpaw_PBE.54.tar.gz
 └── lda
