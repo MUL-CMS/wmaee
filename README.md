@@ -36,23 +36,6 @@ def _get_configuration_directory():
     prefix = '/calc/dnoeger/cms-exercise'
     return join(directory_name, prefix)
 ```
-
-### Possibility to adapt it also for `mul-hpc`
-In order to use it on the new cluster, also go through the installation procedure from above.
-There is already the configuration added for the `mul-hpc` cluster, however it is commented out.
-Thus you just have the uncomment the VASP commands in the header of the `wmaae/wmaee.py` file right after the imports.
-```python
-#__VASP_PREAMBLE = [
-#    'module purge',
-#    'module load intel',
-#    'module load mvapich2/2.2',
-#    'module load mkl',
-#    'module load scalapack/2.0.2',
-#    'ulimit -s unlimited'
-#]
-#__VASP_COMMAND = 'mpirun -np {tasks} /calc/dnoeger/software/vasp-intel-mvapich2-mkl/5.4.1/bin/vasp_std'
-```
-
 ### Add the module to your `PYTHONPATH` variable
 In order to make the module available to your installation add the path to the cloned repository to your 
 `PYTHONPATH` variable either directly in your `.bashrc` or explicitly before you start a Jupyter/IPython or python 
