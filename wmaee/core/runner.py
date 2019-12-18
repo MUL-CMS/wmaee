@@ -8,6 +8,7 @@ from wmaee.core.common import working_directory, ThreadWithReturnValue, get_conf
 from wmaee.core.io import StringStream
 from os.path import join
 from os import getcwd
+from time import sleep
 from io import TextIOWrapper
 
 
@@ -127,6 +128,8 @@ def _read_output(shell, log_file, show_output):
             log_file.write(line)
             if show_output:
                 print(line, end='')
+            # sleep here otherwise the thread will use 100% cpu power
+        sleep(0.05)
         # If everything worked old_line should contain the exit status
     line, exitcode = line.strip().split(' ')
     log_file.flush()

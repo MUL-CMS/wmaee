@@ -26,7 +26,8 @@ class StringStream(StringIO):
         :return: (str) data read from the StringStream object
         """
         while self._remaining < size:
-            sleep(0.01)
+            # otherwise we block the python interpreter from doing anything
+            sleep(0.05)
         result = super(StringStream, self).read()
         # Increase position, from current position seek( ..., 1)
         result_length = len(result)
