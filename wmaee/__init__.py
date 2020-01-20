@@ -1,3 +1,6 @@
+# import nglview to initilize JavaScript FrontendComms and KernelComms
+import nglview as _nglview
+__ = _nglview.demo()
 # This is to hide moudle data
 # plotting functions
 # core and convenience functionality
