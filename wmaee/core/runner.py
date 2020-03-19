@@ -210,12 +210,8 @@ def vasp(directory=None, cpus=2, show_output=True, return_stdout=False, applicat
     """
     if cpus < 0:
         cpus = 1
-    elif cpus > 6:
-        cpus = 6
-        logging.getLogger('VASPRunner').warning('Since you have to share our nodew with you colleagues we limited the maximum number of core to six!\n'
-                                                'Weil Ihr euch die Systemrssourcen teilen müsst, haben wir die Anzahl der maximalen Kerne pro Job auf sechs limitiert!')
     else:
-        cpus = cpus
+        cpus = int(cpus)
     return _run_vasp_internal(directory=directory, cpus=cpus, show_output=show_output, return_stdout=return_stdout,
                               application=application, hostname=hostname, partition=partition)
 
