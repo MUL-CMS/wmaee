@@ -344,7 +344,7 @@
           "module load intel-mpi",
           "ulimit -s unlimited"
         ],
-        "binary": "/home/fs71009/dholec_MOTIF/bin/vasp_ncl",
+        "binary": "/home/fs71009/dholec_MOTIF/Software/vasp.5.4.4/bin",
         "command": "mpirun -np {cores} {binary}"
       },
       "mem_0384" : {
@@ -355,7 +355,7 @@
           "module load intel-mpi",
           "ulimit -s unlimited"
         ],
-        "binary": "/home/fs71009/dholec_MOTIF/bin/vasp_ncl",
+        "binary": "/home/fs71009/dholec_MOTIF/Software/vasp.5.4.4/bin",
         "command": "mpirun -np {cores} {binary}"
       },
       "mem_0768" : {
@@ -366,7 +366,7 @@
           "module load intel-mpi",
           "ulimit -s unlimited"
         ],
-        "binary": "/home/fs71009/dholec_MOTIF/bin/vasp_ncl",
+        "binary": "/home/fs71009/dholec_MOTIF/Software/vasp.5.4.4/bin",
         "command": "mpirun -np {cores} {binary}"
       },
       "default" : {
@@ -377,7 +377,7 @@
           "module load intel-mpi",
           "ulimit -s unlimited"
         ],
-        "binary": "/home/fs71009/dholec_MOTIF/bin/vasp_ncl",
+        "binary": "/home/fs71009/dholec_MOTIF/Software/vasp.5.4.4/bin",
         "command": "mpirun -np {cores} {binary}"
       }
     }
