@@ -12,6 +12,8 @@ from wmaee.utils import ase_to_pymatgen, pymatgen_to_ase
 # VASP related stuff
 from wmaee.vasp import VASPInput, VASPOutput, parse_output, write_input, full_run, vasp
 
+# import the shell
+from wmaee.core.runner import Shell
 
 #forward ASE classes
 from ase import Atoms

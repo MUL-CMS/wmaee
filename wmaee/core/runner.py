@@ -109,7 +109,7 @@ def _send_command(shell, cmd, return_stdout=False, propagate_stdout=True):
     return exit_status == 0 if not return_stdout else (exit_status == 0, shout)
 
 
-def _read_output(shell, log_file, show_output):
+def _read_output(shell, log_file, show_output, time):
     """
     Reads the output of until __END_MARK__ is reached, terminates by returning the exit code
     :param shell: (subprocess.PIPE or StringStream) the shell output handle
@@ -127,9 +127,10 @@ def _read_output(shell, log_file, show_output):
         if line:
             log_file.write(line)
             if show_output:
-                print(line, end='')
+                if __END_MARK__ not in line:
+                    print(line, end='')
             # sleep here otherwise the thread will use 100% cpu power
-        sleep(0.05)
+        sleep(time)
         # If everything worked old_line should contain the exit status
     line, exitcode = line.strip().split(' ')
     log_file.flush()
@@ -143,6 +144,68 @@ def _read_output(shell, log_file, show_output):
         return exitcode
 
 
+class Shell:
+    __instance = None
+
+    def __init__(self, restart=True, show_output=True, time=0.01, propagate_output=True):
+        self.shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE)
+        self.shell_stdin = TextIOWrapper(self.shell_handle.stdin, encoding='utf-8')
+        self.shell_stdout = TextIOWrapper(self.shell_handle.stdout, encoding='utf-8')
+        self.shell_output = StringStream()
+        self.shell = (self.shell_handle, self.shell_stdin, self.shell_stdout, self.shell_output)
+        self.restart = restart
+        self.time = time
+        self.log_file_fd = open('shell.log', 'w')
+        self.thr_read_log = ThreadWithReturnValue(target=_read_output,
+                                                  args=(self.shell, self.log_file_fd, show_output, self.time))
+        self.thr_read_log.start()
+        self.show_output = show_output
+        self.propagate_output = propagate_output
+
+    @classmethod
+    def get(cls):
+        if cls.__instance is None:
+            cls.__instance = Shell()
+        return cls.__instance
+
+    def run(self, cmd, return_stdout=False):
+        if isinstance(cmd, str):
+            cmd = [cmd]
+        output = []
+        if not _shell_alive(self.shell_handle):
+            self.__init__(restart=self.restart, show_output=self.show_output, time=self.time)
+        for i, command in enumerate(cmd):
+            o = _send_command(self.shell, command, return_stdout=return_stdout, propagate_stdout=self.propagate_output)
+            output.append(o)
+        return output
+
+    def __call__(self, *args):
+        return self.run(*args)
+
+    @property
+    def alive(self):
+        return _shell_alive(self.shell_handle)
+
+    def close(self):
+        if self.alive:
+            self.shell_output.write('%s 0' % __END_MARK__)
+            self.thr_read_log.join()
+            self.shell_stdin.write('exit\n')
+
+    def __enter__(self, *args):
+        if self.alive:
+            return self
+        else:
+            if self.restart:
+                self.__init__(restart=self.restart, show_output=self.show_output, time=self.time)
+            else:
+                raise RuntimeError('Shell is not alive')
+
+    def __exit__(self, *args):
+        if self.alive:
+            self.close()
+
+
 def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=False, application=None, hostname=None, partition=None):
     """
     Call VASP programm and obtain the output, by executing the contents of __VASP_PREAMBLE and __VASP_COMMAND in
@@ -154,11 +217,7 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
     :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
     """
     logger = logging.getLogger('VASPRunner')
-    shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE)
-    shell_stdin = TextIOWrapper(shell_handle.stdin, encoding='utf-8')
-    shell_stdout = TextIOWrapper(shell_handle.stdout, encoding='utf-8')
-    shell_output = StringStream()
-    shell = (shell_handle, shell_stdin, shell_stdout, shell_output)
+
 
     if directory is None:
         directory = working_directory(getcwd())
@@ -169,22 +228,20 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         directory = working_directory(directory)
 
     with directory:
-        log_file = '{}.vasp.log'.format(directory.name)
-        log_file_fd = open(log_file, 'w')
-
-        thr_read_log = ThreadWithReturnValue(target=_read_output, args=(shell, log_file_fd, show_output))
-        thr_read_log.start()
         preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname, partition=partition)
         command = command.format(cores=cpus, binary=binary)
         echo_cmd = 'echo "{} $?"'.format(__END_MARK__)
         change_command = 'cd {}'.format(getcwd())
-        _send_command(shell, change_command, return_stdout=False, propagate_stdout=False)
-        for preamble_ in preamble:
-            _send_command(shell, preamble_, return_stdout=False, propagate_stdout=False)
 
-        output = _send_command(shell, command, return_stdout=return_stdout, propagate_stdout=True)
-        _send_command(shell, echo_cmd, return_stdout=False, propagate_stdout=True)
-        thr_read_log.join()
+        with Shell(show_output=show_output) as shell:
+            shell.show_output = False
+            shell.propagate_output = False
+            shell.run(change_command, return_stdout=False)
+            shell.propagate_output = True
+            shell.show_output = show_output
+            for preamble_ in preamble:
+                shell.run(preamble_, return_stdout=False)
+            output = shell.run(command, return_stdout=return_stdout)
 
         if return_stdout:
             exitcode, output = output
