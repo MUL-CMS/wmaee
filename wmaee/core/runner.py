@@ -3,13 +3,19 @@ import os
 import logging
 import shlex
 import json
+import sys
 from subprocess import PIPE, Popen
-from wmaee.core.common import working_directory, ThreadWithReturnValue, get_configuration_directory
-from wmaee.core.io import StringStream
+from wmaee.core.common import working_directory, get_configuration_directory, LoggerMixin
+from wmaee.core.event import Event
 from os.path import join
 from os import getcwd
-from time import sleep
-from io import TextIOWrapper
+from time import sleep, time as current_time
+from io import TextIOWrapper, StringIO
+from threading import Thread, Event as ThreadingEvent
+try:
+    from queue import Queue, Empty
+except ImportError:
+    from Queue import Queue, Empty
 
 
 __END_MARK__ = '__VASP_FINISHED__'
@@ -21,6 +27,7 @@ DEFAULT_PARTITION = 'default'
 __LOADED_CONFIGURATION = None
 
 logger = logging.getLogger('wmaee.core.runner')
+
 
 def get_vasp_configuration(application=None, hostname=None, partition=None):
 
@@ -54,6 +61,7 @@ def get_vasp_configuration(application=None, hostname=None, partition=None):
 
     preamble, binary, command = current_configuration['preamble'], current_configuration['binary'], current_configuration['command']
     return preamble, command, binary
+
 
 def _shell_alive(shell_handle):
     """
@@ -144,23 +152,113 @@ def _read_output(shell, log_file, show_output, time):
         return exitcode
 
 
-class Shell:
+class Shell(LoggerMixin):
+
     __instance = None
 
-    def __init__(self, restart=True, show_output=True, time=0.01, propagate_output=True):
-        self.shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE)
+    def __init__(self, restart=True, stdout=sys.stdout, stderr=sys.stderr, stdin=None, out_log=None, err_log=None, time=0.01, timing=True):
+        super(Shell, self).__init__()
+        self.shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE, stderr=PIPE)
         self.shell_stdin = TextIOWrapper(self.shell_handle.stdin, encoding='utf-8')
         self.shell_stdout = TextIOWrapper(self.shell_handle.stdout, encoding='utf-8')
-        self.shell_output = StringStream()
-        self.shell = (self.shell_handle, self.shell_stdin, self.shell_stdout, self.shell_output)
-        self.restart = restart
-        self.time = time
-        self.log_file_fd = open('shell.log', 'w')
-        self.thr_read_log = ThreadWithReturnValue(target=_read_output,
-                                                  args=(self.shell, self.log_file_fd, show_output, self.time))
-        self.thr_read_log.start()
-        self.show_output = show_output
-        self.propagate_output = propagate_output
+        self.shell_stderr = TextIOWrapper(self.shell_handle.stderr, encoding='utf-8')
+        self.shell = (self.shell_handle, self.shell_stdin, self.shell_stdout, self.shell_stderr)
+        self._restart = restart
+        self._time = time
+        self._timing = timing
+        self._command_queue = Queue()
+        self.command_finished = Event()
+        self.command_started = Event()
+        self._out_log_fd = open('%s.err.log' % out_log, 'w') if isinstance(out_log, str) else out_log
+        self._err_log_fd = open('%s.err.log' % err_log, 'w') if isinstance(err_log, str) else err_log
+        self._history = []
+        if stdin is None:
+            self._default_stdin = StringIO()
+            stdin = self._default_stdin
+        self._stdin = stdin
+        self._stderr = stderr
+        self._stdout = stdout
+        self._close = ThreadingEvent()
+        streams = (self.shell_stdout, self.shell_stderr)
+        self._queues = [Queue() for _ in streams]
+        self._threads = []
+        self._finish_mark = '__local_command_finish_mark__'
+        for queue, stream in zip(self._queues, streams):
+            thread = Thread(target=self._enqueue_output, args=(stream, queue))
+            thread.daemon = True
+            self._threads.append(thread)
+            thread.start()
+
+        # TODO: Implement command listening and output buffering in distributor thread
+        self._output_hooks = []
+        self._input_hooks = []
+        self.output_streams = []
+        if self._stdout is not None:
+            self.output_streams.append(self._stdout)
+        if self._out_log_fd is not None:
+            self.output_streams.append(self._out_log_fd)
+        self.error_streams = []
+        if self._stderr is not None:
+            self.error_streams.append(self._stderr)
+        if self._err_log_fd is not None:
+            self.error_streams.append(self._err_log_fd)
+        self.input_streams = [self.shell_stdin]
+
+        self._thr_dist = Thread(target=self._distribute)
+        self._thr_dist.start()
+
+    def _enqueue_output(self, out, queue):
+        self.logger.debug('Forwarder thread started')
+        for line in iter(out.readline, ''):
+            # keep forwarding if command is active, as long as commands are in the queue
+            if self._command_queue.qsize() == 0:
+                if self._close.is_set():
+                    break
+            if line:
+                queue.put(line)
+        self.logger.debug('Forwarder thread finished')
+
+    def _distribute(self):
+        outq, errq = self._queues
+        while True:
+            if self._command_queue.qsize() == 0:
+                # command are in the queue block until we have worked on them
+                if self._close.is_set():
+                    break
+            for q, s in zip((outq, errq), (self.output_streams, self.error_streams)):
+                try:
+                    line = q.get_nowait()
+                except Empty:
+                    sleep(self._time)
+                else:
+                    if line:
+                        if self._finish_mark in line:
+                            # it is the echo finish mark command -> do not propagate it
+                            # we allow the loop to exit
+                            # get the timing
+                            if self._timing:
+                                cmd_id, cmd, start_time = self._command_queue.get()
+                            else:
+                                cmd_id, cmd = self._command_queue.get()
+                            # try to fetch the exit code
+                            try:
+                                mark, exit_code = line.split(' ')
+                                exit_code = int(exit_code)
+                            except:
+                                exit_code = float('nan')
+                            if self._timing:
+                                elapsed = current_time() - start_time
+                                result = (cmd_id, cmd, elapsed, exit_code)
+                            else:
+                                result = (cmd_id, cmd, exit_code)
+                            self._history.append(result)
+                            self.command_finished.fire(*result)
+                        else:
+                            for stream in s:
+                                stream.write(line)
+                    else:
+                        # try the next queue
+                        sleep(self._time)
 
     @classmethod
     def get(cls):
@@ -168,38 +266,64 @@ class Shell:
             cls.__instance = Shell()
         return cls.__instance
 
-    def run(self, cmd, return_stdout=False):
+    def restart(self):
+        if not self.alive:
+            self.close()
+            self.__init__(restart=self._restart, stdout=self._stdout, stderr=self._stderr, stdin=self._stdin, out_log=self._out_log_fd, err_log=self._err_log_fd)
+
+    def _send_command(self, cmd, raw=False):
+        if self._restart:
+            self.restart()
+        if cmd.endswith('\n'):
+            cmd = cmd.rsplit()
+        if not raw:
+            # self._shell_stdin.write(cmd + '\n')
+            # we have to set the threading event and tell the distributor thread
+            # that we have started a command and prevent it from joining
+            cmd_id = len(self._history) + self._command_queue.qsize()
+            if self._timing:
+                current_timing = current_time()
+                self._command_queue.put((cmd_id, cmd, current_timing))
+            else:
+                self._command_queue.put((cmd_id, cmd))
+            echo_cmd = 'echo {} $?\n'.format(self._finish_mark)
+            cmd = '; '.join([cmd, echo_cmd])
+
+        self.shell_stdin.write(cmd)
+        self.command_started.fire()
+        self.shell_stdin.flush()
+
+    def run(self, cmd, output):
         if isinstance(cmd, str):
             cmd = [cmd]
-        output = []
-        if not _shell_alive(self.shell_handle):
-            self.__init__(restart=self.restart, show_output=self.show_output, time=self.time)
         for i, command in enumerate(cmd):
-            o = _send_command(self.shell, command, return_stdout=return_stdout, propagate_stdout=self.propagate_output)
-            output.append(o)
-        return output
+            self._send_command(command)
 
-    def __call__(self, *args):
-        return self.run(*args)
+    def __call__(self, *args, **kwargs):
+        return self.run(*args, **kwargs)
 
     @property
     def alive(self):
         return _shell_alive(self.shell_handle)
 
+    @property
+    def history(self):
+        return iter(reversed(self._history))
+
     def close(self):
         if self.alive:
-            self.shell_output.write('%s 0' % __END_MARK__)
-            self.thr_read_log.join()
-            self.shell_stdin.write('exit\n')
+            # we do not want the threads to wait for a response
+            self._send_command('exit', raw=True)
+            self._close.set()
+            self._thr_dist.join()
 
     def __enter__(self, *args):
         if self.alive:
             return self
         else:
-            if self.restart:
-                self.__init__(restart=self.restart, show_output=self.show_output, time=self.time)
-            else:
-                raise RuntimeError('Shell is not alive')
+            if self._restart:
+                self.restart()
+            return self
 
     def __exit__(self, *args):
         if self.alive:
@@ -233,7 +357,7 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         echo_cmd = 'echo "{} $?"'.format(__END_MARK__)
         change_command = 'cd {}'.format(getcwd())
 
-        with Shell(show_output=show_output) as shell:
+        with Shell(stdout=sys.stdout if show_output else None) as shell:
             shell.show_output = False
             shell.propagate_output = False
             shell.run(change_command, return_stdout=False)
