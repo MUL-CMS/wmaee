@@ -157,7 +157,7 @@ class Shell(LoggerMixin):
     __instance = None
 
     def __init__(self, restart=True, stdout=sys.stdout, stderr=sys.stderr, stdin=None, out_log=None, err_log=None,
-                 time=0.005, timing=True, shell_cmd='/bin/bash'):
+                 time=0.0001, timing=True, shell_cmd='/bin/bash'):
         super(Shell, self).__init__()
         self.shell_handle = Popen(shlex.split(shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
         self.shell_stdin = TextIOWrapper(self.shell_handle.stdin, encoding='utf-8')
