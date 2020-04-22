@@ -1,5 +1,6 @@
 
 from pymatgen.io.ase import AseAtomsAdaptor
+from collections.abc import Iterable
 
 def pymatgen_to_ase(structure):
     """
@@ -16,3 +17,9 @@ def ase_to_pymatgen(atoms):
     :return: (pymatgen.Structure) the converted object
     """
     return AseAtomsAdaptor.get_structure(atoms)
+
+def collection(a):
+    return [a] if isinstance(a, str) else (a if isinstance(a, (set, list, tuple)) else [a])
+
+def unpack_single(a):
+    return a[0] if len(a) == 1 else a

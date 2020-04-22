@@ -1,4 +1,3 @@
-
 import os
 import logging
 import shlex
@@ -6,17 +5,19 @@ import json
 import sys
 from subprocess import PIPE, Popen
 from wmaee.core.common import working_directory, get_configuration_directory, LoggerMixin
-from wmaee.core.event import Event
+from wmaee.core.event import Event, EventHandler
+from wmaee.utils import collection, unpack_single
 from os.path import join
 from os import getcwd
 from time import sleep, time as current_time
 from io import TextIOWrapper, StringIO
 from threading import Thread, Event as ThreadingEvent
+from itertools import zip_longest
+
 try:
     from queue import Queue, Empty
 except ImportError:
     from Queue import Queue, Empty
-
 
 __END_MARK__ = '__VASP_FINISHED__'
 
@@ -30,7 +31,6 @@ logger = logging.getLogger('wmaee.core.runner')
 
 
 def get_vasp_configuration(application=None, hostname=None, partition=None):
-
     if application is None:
         # search in environment variables
         application = os.environ.get('WMAEE_APPLICATION', default=None)
@@ -46,7 +46,7 @@ def get_vasp_configuration(application=None, hostname=None, partition=None):
             partition = DEFAULT_PARTITION
 
     configuration_file = join(get_configuration_directory(), APPLICATION_CONFIG)
-    global  __LOADED_CONFIGURATION
+    global __LOADED_CONFIGURATION
     if __LOADED_CONFIGURATION is None:
         with open(configuration_file, 'r') as config_file:
             configuration = json.load(config_file)
@@ -59,7 +59,8 @@ def get_vasp_configuration(application=None, hostname=None, partition=None):
     except KeyError:
         raise RuntimeError('Failed to configure')
 
-    preamble, binary, command = current_configuration['preamble'], current_configuration['binary'], current_configuration['command']
+    preamble, binary, command = current_configuration['preamble'], current_configuration['binary'], \
+                                current_configuration['command']
     return preamble, command, binary
 
 
@@ -153,12 +154,12 @@ def _read_output(shell, log_file, show_output, time):
 
 
 class Shell(LoggerMixin):
-
     __instance = None
 
-    def __init__(self, restart=True, stdout=sys.stdout, stderr=sys.stderr, stdin=None, out_log=None, err_log=None, time=0.01, timing=True):
+    def __init__(self, restart=True, stdout=sys.stdout, stderr=sys.stderr, stdin=None, out_log=None, err_log=None,
+                 time=0.005, timing=True, shell_cmd='/bin/bash'):
         super(Shell, self).__init__()
-        self.shell_handle = Popen(shlex.split('/bin/bash'), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        self.shell_handle = Popen(shlex.split(shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
         self.shell_stdin = TextIOWrapper(self.shell_handle.stdin, encoding='utf-8')
         self.shell_stdout = TextIOWrapper(self.shell_handle.stdout, encoding='utf-8')
         self.shell_stderr = TextIOWrapper(self.shell_handle.stderr, encoding='utf-8')
@@ -179,6 +180,8 @@ class Shell(LoggerMixin):
         self._stderr = stderr
         self._stdout = stdout
         self._close = ThreadingEvent()
+        self._cmd_active = ThreadingEvent()
+        self._cmd_data = None
         streams = (self.shell_stdout, self.shell_stderr)
         self._queues = [Queue() for _ in streams]
         self._threads = []
@@ -190,8 +193,16 @@ class Shell(LoggerMixin):
             thread.start()
 
         # TODO: Implement command listening and output buffering in distributor thread
-        self._output_hooks = []
-        self._input_hooks = []
+        self._output_hook = Event()
+        self._error_hook = Event()
+        self._input_hook = Event()
+        self._started_handler = EventHandler('run_block_started_handler', self._set_current_command_active)
+        self._finished_handler = EventHandler('run_block_finished_handler', self._set_current_command_finished)
+        self.command_started.set_event_handler(self._started_handler)
+        self.command_finished.set_event_handler(self._finished_handler)
+        self._remaining_commands = []  # local buffer for batch execution
+        self._output_hooks = {}
+        self._error_hooks = {}
         self.output_streams = []
         if self._stdout is not None:
             self.output_streams.append(self._stdout)
@@ -219,13 +230,17 @@ class Shell(LoggerMixin):
         self.logger.debug('Forwarder thread finished')
 
     def _distribute(self):
+        """
+        Propagate and forward the input streams
+        """
         outq, errq = self._queues
         while True:
             if self._command_queue.qsize() == 0:
                 # command are in the queue block until we have worked on them
                 if self._close.is_set():
                     break
-            for q, s in zip((outq, errq), (self.output_streams, self.error_streams)):
+            for q, s, hk, hks in zip((outq, errq), (self.output_streams, self.error_streams),
+                                     (self._output_hook, self._error_hook), (self._output_hooks, self._error_hooks)):
                 try:
                     line = q.get_nowait()
                 except Empty:
@@ -256,6 +271,15 @@ class Shell(LoggerMixin):
                         else:
                             for stream in s:
                                 stream.write(line)
+                            # if a command is active we write it to the hooks
+                            if self._timing:
+                                cmd_id, _, _ = self._cmd_data
+                            else:
+                                cmd_id, _ = self._cmd_data
+
+                            if cmd_id in hks:
+                                for hndlr in hks[cmd_id]:
+                                    hk.fire_handler(hndlr.name, line)
                     else:
                         # try the next queue
                         sleep(self._time)
@@ -269,7 +293,15 @@ class Shell(LoggerMixin):
     def restart(self):
         if not self.alive:
             self.close()
-            self.__init__(restart=self._restart, stdout=self._stdout, stderr=self._stderr, stdin=self._stdin, out_log=self._out_log_fd, err_log=self._err_log_fd)
+            # now restart the shell, and initialize everything
+            self.__init__(restart=self._restart,
+                          stdout=self._stdout,
+                          stderr=self._stderr,
+                          stdin=self._stdin,
+                          out_log=self._out_log_fd,
+                          err_log=self._err_log_fd,
+                          time=self._time,
+                          timing=self._timing)
 
     def _send_command(self, cmd, raw=False):
         if self._restart:
@@ -280,24 +312,125 @@ class Shell(LoggerMixin):
             # self._shell_stdin.write(cmd + '\n')
             # we have to set the threading event and tell the distributor thread
             # that we have started a command and prevent it from joining
-            cmd_id = len(self._history) + self._command_queue.qsize()
+            cmd_id = self._get_next_cmd_id()
             if self._timing:
                 current_timing = current_time()
-                self._command_queue.put((cmd_id, cmd, current_timing))
+                cmd_data = (cmd_id, cmd, current_timing)
             else:
-                self._command_queue.put((cmd_id, cmd))
+                cmd_data = (cmd_id, cmd)
+            self._command_queue.put(cmd_data)
             echo_cmd = 'echo {} $?\n'.format(self._finish_mark)
             cmd = '; '.join([cmd, echo_cmd])
 
         self.shell_stdin.write(cmd)
-        self.command_started.fire()
+        if not raw:
+            # we want to execute this line after we have written the command to the stdin
+            self.command_started.fire(*cmd_data)
         self.shell_stdin.flush()
+        return cmd_id if not raw else None
 
-    def run(self, cmd, output):
-        if isinstance(cmd, str):
-            cmd = [cmd]
+    def _set_current_command_active(self, *args):
+        if not self._cmd_active.is_set():
+            self._cmd_active.set()
+            self._cmd_data = args
+        else:
+            pass
+            self._remaining_commands.append(args)
+            # raise RuntimeError('It is not possible to run shell commands on parallel')
+
+    def _set_current_command_finished(self, *args):
+        cmd_id, cmd = args[:2]
+        if not self._cmd_active.is_set():
+            raise RuntimeError('No command is currently active')
+        else:
+            if self._timing:
+                active_id, active_cmd, _ = self._cmd_data
+            else:
+                active_id, active_cmd = self._cmd_data
+            if cmd_id == active_id and active_cmd == cmd:
+                # everything is alright
+                self._cmd_active.clear()
+                # Now remove the event handler of this command
+                if cmd_id in self._output_hooks:
+                    for handlr in self._output_hooks[cmd_id]:
+                        self._output_hook.remove_event_handler(handlr)
+                    del self._output_hooks[cmd_id]
+                if cmd_id in self._error_hooks:
+                    for handlr in self._error_hooks[cmd_id]:
+                        self._error_hook.remove_event_handler(handlr)
+                    del self._error_hooks[cmd_id]
+                if len(self._remaining_commands) > 0:
+                    # set the next command active
+                    next_cmd_data = self._remaining_commands.pop(0)
+                    self._set_current_command_active(*next_cmd_data)
+            else:
+                self.logger.warning('The command %i:"%s" finished although no listener was registered' % (cmd_id, cmd))
+
+    def _block_until_command_finished(self):
+        while self._cmd_active.is_set():
+            sleep(self._time)
+
+    def _get_next_cmd_id(self):
+        return len(self._history) + self._command_queue.qsize()
+
+    def run(self, cmd, block=True, output=None, error=None, return_out=False, return_err=False, return_id=True):
+        propagator = lambda stream: lambda line: stream.write(line)
+        cmd = collection(cmd)
+        err_buffers = [StringIO() for _ in cmd] if return_err else []
+        out_buffers = [StringIO() for _ in cmd] if return_out else []
+        cmd_ids = []
+        if any((return_out, return_err)) and not block:
+            block = True
+            self.logger.warning(
+                'The "return_err" and "return_out" keyword argument cannot be used in combination with block=False. '
+                'The settings will be overridden!')
+
         for i, command in enumerate(cmd):
+            next_cmd_id = self._get_next_cmd_id()
+            if output is not None:
+                output_handlers = [EventHandler('output_hook_%i_%i' % (next_cmd_id, j), propagator(o)) for j, o in
+                                   enumerate(collection(output))]
+                self._output_hooks[next_cmd_id] = output_handlers
+                for handler in output_handlers:
+                    self._output_hook.add_event_handler(handler)
+            if error is not None:
+                error_handlers = [EventHandler('error_hook_%i_%i' % (next_cmd_id, j), propagator(o)) for j, o in
+                                  enumerate(collection(error))]
+                self._error_hooks[next_cmd_id] = error_handlers
+                for handler in error_handlers:
+                    self._error_hook.add_event_handler(handler)
+            if return_out:
+                # also this guys will be removed at finished call, thus we keep everything clean
+                return_out_handler = EventHandler('return_output_hook_%i' % next_cmd_id, propagator(out_buffers[i]))
+                if next_cmd_id not in self._output_hooks:
+                    self._output_hooks[next_cmd_id] = [return_out_handler]
+                else:
+                    self._output_hooks[next_cmd_id].append(return_out_handler)
+                self._output_hook.add_event_handler(return_out_handler)
+            if return_err:
+                return_err_handler = EventHandler('return_error_hook_%i' % next_cmd_id, propagator(err_buffers[i]))
+                if next_cmd_id not in self._error_hooks:
+                    self._error_hooks[next_cmd_id] = [return_err_handler]
+                else:
+                    self._error_hooks[next_cmd_id].append(return_err_handler)
+                self._error_hook.add_event_handler(return_err_handler)
             self._send_command(command)
+            if block:
+                self._block_until_command_finished()
+            cmd_ids.append(next_cmd_id)
+
+        if return_out:
+            for out_buf in out_buffers:
+                out_buf.seek(0)
+            out_buffers = [out_buf.getvalue() for out_buf in out_buffers]
+        if return_err:
+            for err_buf in err_buffers:
+                err_buf.seek(0)
+            err_buffers = [err_buf.getvalue() for err_buf in err_buffers]
+        if any((return_err, return_out, return_id)):
+            r = [data for data, b in zip((cmd_ids, out_buffers, err_buffers), (return_id, return_out, return_err)) if b]
+            r = list(zip(*r))
+            return unpack_single(r)
 
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
@@ -330,7 +463,8 @@ class Shell(LoggerMixin):
             self.close()
 
 
-def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=False, application=None, hostname=None, partition=None):
+def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=False, application=None, hostname=None,
+                       partition=None):
     """
     Call VASP programm and obtain the output, by executing the contents of __VASP_PREAMBLE and __VASP_COMMAND in
     bash subprocess and piping the output
@@ -342,7 +476,6 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
     """
     logger = logging.getLogger('VASPRunner')
 
-
     if directory is None:
         directory = working_directory(getcwd())
 
@@ -352,7 +485,8 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         directory = working_directory(directory)
 
     with directory:
-        preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname, partition=partition)
+        preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname,
+                                                           partition=partition)
         command = command.format(cores=cpus, binary=binary)
         echo_cmd = 'echo "{} $?"'.format(__END_MARK__)
         change_command = 'cd {}'.format(getcwd())
@@ -379,7 +513,9 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         return exitcode if not return_stdout else (exitcode, output)
         # Write input files
 
-def vasp(directory=None, cpus=2, show_output=True, return_stdout=False, application=None, hostname=None, partition=None):
+
+def vasp(directory=None, cpus=2, show_output=True, return_stdout=False, application=None, hostname=None,
+         partition=None):
     """
     Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
     will be executed on os.getcwd() directory
@@ -395,4 +531,3 @@ def vasp(directory=None, cpus=2, show_output=True, return_stdout=False, applicat
         cpus = int(cpus)
     return _run_vasp_internal(directory=directory, cpus=cpus, show_output=show_output, return_stdout=return_stdout,
                               application=application, hostname=hostname, partition=partition)
-

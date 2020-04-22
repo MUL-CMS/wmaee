@@ -1,10 +1,10 @@
+import os
 import logging
 from threading import Thread
 from uuid import uuid4
-from os import chdir, getcwd
-from shutil import rmtree
+from os import chdir, getcwd, mkdir
 from os.path import join, exists
-from os import mkdir
+from shutil import rmtree
 
 
 from typing import List
@@ -97,6 +97,10 @@ class LoggerMixin(object):
 
     @classmethod
     def fullname(cls):
+        """
+        Returns the fully qualified name string of the cls
+        :return: (str) the class identifier
+        """
         name = '.'.join([
             cls.__module__,
             cls.__name__
@@ -125,7 +129,6 @@ def get_configuration_directory():
     Build the path the to configuration directory for this module
     :return: (str) the absolute path of the configuration directory
     """
-    import os
     if 'WMAEE_CONFIG_DIR' not in os.environ:
         if exists('.config'):
             return join(os.getcwd(), '.config')
