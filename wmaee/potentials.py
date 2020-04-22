@@ -281,6 +281,8 @@ def construct_potcar(poscar, xc_func='gga'):
     :param xc_func: (str) the name of the xc functional (as configure) (default: 'gga')
     :return: (pymatgen.io.vasp.Potcar) Potcar instance representing the corresponding POTCAR file
     """
+    if not POTENTIAL_ARCHIVES:
+        _make_potential_archives()
     if xc_func == 'pbe':
         xc_func = 'gga'
     archive = POTENTIAL_ARCHIVES[xc_func]
@@ -300,5 +302,3 @@ def construct_potcar(poscar, xc_func='gga'):
         if not poscar_species == [p.element for p in potcar]:
             raise PotentialException('Something went wrong while constructing the POTCAR file')
     return potcar
-
-_make_potential_archives()

@@ -12,7 +12,7 @@ from os import getcwd
 from time import sleep, time as current_time
 from io import TextIOWrapper, StringIO
 from threading import Thread, Event as ThreadingEvent
-from itertools import zip_longest
+
 
 try:
     from queue import Queue, Empty
@@ -491,7 +491,7 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         echo_cmd = 'echo "{} $?"'.format(__END_MARK__)
         change_command = 'cd {}'.format(getcwd())
 
-        with Shell(stdout=sys.stdout if show_output else None) as shell:
+        with Shell(stdout=sys.stdout if show_output else None, stderr=sys.stderr) as shell:
             shell.show_output = False
             shell.propagate_output = False
             shell.run(change_command, return_stdout=False)
