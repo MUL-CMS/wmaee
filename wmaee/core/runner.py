@@ -12,7 +12,7 @@ from os import getcwd
 from time import sleep, time as current_time
 from io import TextIOWrapper, StringIO
 from threading import Thread, Event as ThreadingEvent
-from typing import Union, Optional, NoReturn, TextIO
+from typing import Union, Optional, NoReturn, TextIO, Collection, Iterator
 
 try:
     from queue import Queue, Empty
@@ -132,7 +132,7 @@ class Shell(LoggerMixin):
         self._thr_dist = Thread(target=self._distribute)
         self._thr_dist.start()
 
-    def _enqueue_output(self, out : TextIO, queue: Queue) -> NoReturn:
+    def _enqueue_output(self, out: TextIO, queue: Queue) -> NoReturn:
         """
         Function to wrap streams into queues to allow for non-blocking I/O
         :param out: (TextIO) the stream used for non-blocking I/O
@@ -230,7 +230,7 @@ class Shell(LoggerMixin):
                           timing=self._timing,
                           shell_cmd=self._shell_cmd)
 
-    def _send_command(self, cmd : str, raw: Optional[bool] = False) -> Union[None, int]:
+    def _send_command(self, cmd: str, raw: Optional[bool] = False) -> Union[None, int]:
         """
         Sends a command to the input stream, and generates the meta-data for the execution
         :param cmd: (str) the command to execute
@@ -322,7 +322,24 @@ class Shell(LoggerMixin):
         """
         return len(self._history) + self._command_queue.qsize()
 
-    def run(self, cmd, block=True, output=None, error=None, return_out=False, return_err=False, return_id=True, return_exit=False):
+    def run(self, cmd: Union[str, Collection[str]], block: Optional[bool] = True,
+            output: Optional[Union[None, TextIO, Collection[TextIO]]] = None,
+            error: Optional[Union[None, TextIO, Collection[TextIO]]] = None,
+            return_out: Optional[bool] = False, return_err: Optional[bool] = False,
+            return_id: Optional[bool] = True, return_exit: Optional[bool] = False) -> Union[tuple, Collection[tuple]]:
+        """
+        Execute a command in the current shell
+        :param cmd: (str, list of str) a command or a list of commands
+        :param block: (bool) wether to block execution until the command(s) is/are finished [default: True]
+        :param output: (None, TextIO or list of TextIO) a stream of a list of stream where stdout should be forked to [default: None]
+        :param error: (None, TextIO or list of TextIO) a stream of a list of stream where stderr should be forked to [default: None]
+        :param return_out: (bool) a flag if stdout should be returned can only be used with block=True [default: False]
+        :param return_err: (bool) a flag if stderr should be returned can only be used with block=True [default: False]
+        :param return_id: (bool) a flag if command ids should be returned [default: True]
+        :param return_exit: (bool) a flag if exit codes be returned can only be used with block=True [default: False]
+        :return: (tuple, list of tuple) the fields requested as given by return_out, return_err, return_id and
+        return_exit
+        """
         propagator = lambda stream: lambda line: stream.write(line)
         cmd = collection(cmd)
         err_buffers = [StringIO() for _ in cmd] if return_err else []
@@ -334,6 +351,7 @@ class Shell(LoggerMixin):
             def _handler(other_id, *args):
                 if cmd_id == other_id:
                     exit_codes.append(args[-1])
+
             return _handler
 
         if any((return_out, return_err, return_exit)) and not block:
@@ -373,7 +391,8 @@ class Shell(LoggerMixin):
                 self._error_hook.add_event_handler(return_err_handler)
             if return_exit:
                 exit_handler_name = 'run_exit_handler_%i' % next_cmd_id
-                self.command_finished.add_event_handler(EventHandler(exit_handler_name, exit_code_extractor(next_cmd_id)))
+                self.command_finished.add_event_handler(
+                    EventHandler(exit_handler_name, exit_code_extractor(next_cmd_id)))
                 exit_code_length = len(exit_codes)
             self._send_command(command)
             if block:
@@ -394,22 +413,54 @@ class Shell(LoggerMixin):
                 err_buf.seek(0)
             err_buffers = [err_buf.getvalue() for err_buf in err_buffers]
         if any((return_err, return_out, return_id)):
-            r = [data for data, b in zip((cmd_ids, out_buffers, err_buffers, exit_codes), (return_id, return_out, return_err, return_exit)) if b]
+            r = [data for data, b in
+                 zip((cmd_ids, out_buffers, err_buffers, exit_codes), (return_id, return_out, return_err, return_exit))
+                 if b]
             r = list(zip(*r))
             return unpack_single(r)
 
-    def __call__(self, *args, **kwargs):
-        return self.run(*args, **kwargs)
+    def __call__(self, cmd: Union[str, Collection[str]], block: Optional[bool] = True,
+                 output: Optional[Union[None, TextIO, Collection[TextIO]]] = None,
+                 error: Optional[Union[None, TextIO, Collection[TextIO]]] = None,
+                 return_out: Optional[bool] = False, return_err: Optional[bool] = False,
+                 return_id: Optional[bool] = True, return_exit: Optional[bool] = False) -> Union[
+        tuple, Collection[tuple]]:
+        """
+        Syntactic sugar for self.run
+        :param cmd: (str, list of str) a command or a list of commands
+        :param block: (bool) wether to block execution until the command(s) is/are finished [default: True]
+        :param output: (None, TextIO or list of TextIO) a stream of a list of stream where stdout should be forked to [default: None]
+        :param error: (None, TextIO or list of TextIO) a stream of a list of stream where stderr should be forked to [default: None]
+        :param return_out: (bool) a flag if stdout should be returned can only be used with block=True [default: False]
+        :param return_err: (bool) a flag if stderr should be returned can only be used with block=True [default: False]
+        :param return_id: (bool) a flag if command ids should be returned [default: True]
+        :param return_exit: (bool) a flag if exit codes be returned can only be used with block=True [default: False]
+        :return: (tuple, list of tuple) the fields requested as given by return_out, return_err, return_id and
+        return_exit
+        """
+        return self.run(cmd, block=block, output=output, error=error, return_out=return_out, return_err=return_err,
+                        return_id=return_id, return_exit=return_id)
 
     @property
-    def alive(self):
+    def alive(self) -> bool:
+        """
+        Queries the shell for its health state
+        :return: (bool) alive flag
+        """
         return self._shell_alive()
 
     @property
-    def history(self):
+    def history(self) -> Iterator[tuple]:
+        """
+        Returns the history in reversed order
+        :return: (iterator of tuple) the content depend  if timing is set
+        """
         return iter(reversed(self._history))
 
-    def close(self):
+    def close(self) -> NoReturn:
+        """
+        Closes the shell if it is still alive
+        """
         if self.alive:
             # we do not want the threads to wait for a response
             self._send_command('exit', raw=True)
@@ -417,6 +468,10 @@ class Shell(LoggerMixin):
             self._thr_dist.join()
 
     def __enter__(self, *args):
+        """
+        fucntion for with semantics, restarts the shell if restart flag is set
+        :return: (Shell) the self Shell instance
+        """
         if self.alive:
             return self
         else:
@@ -424,7 +479,10 @@ class Shell(LoggerMixin):
                 self.restart()
             return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> NoReturn:
+        """
+        function for with semantics. Closes the shell
+        """
         if self.alive:
             self.close()
 
