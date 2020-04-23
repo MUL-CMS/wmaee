@@ -69,16 +69,29 @@ class Shell(LoggerMixin):
 
     def __init__(self, restart: Optional[bool] = True, stdout: Optional[Union[None, TextIO]] = sys.stdout,
                  stderr: Optional[Union[None, TextIO]] = sys.stderr,
-                 stdin: Optional[Union[None, TextIO]] = None, out_log: Optional[Union[None, TextIO]] = None,
-                 err_log: Optional[Union[None, TextIO]] = None, time: Optional[float] = 0.0001,
+                 stdin: Optional[Union[None, TextIO]] = None, out_log: Optional[Union[None, TextIO, str]] = None,
+                 err_log: Optional[Union[None, TextIO, str]] = None, time: Optional[float] = 0.0001,
                  timing: Optional[bool] = True, shell_cmd: Optional[str] = '/bin/bash'):
+        """
+        Constructs a bash/sh/zsh shell instance
+        :param restart: (bool) flag wether to automatically restart the shell subprocess if it died [default: True]
+        :param stdout: (TextIO or None) where to redirect the shells stdout stream [default: sys.stdout]
+        :param stderr: (TextIO or None) where to redirect the shells stderr stream [default: sys.stderr]
+        :param stdin: (TextIO or None) stdin for the shell [default: None] TODO: maybe we should remove this option here
+        :param out_log: (TextIO, str or None) a log file where to write the shell stdout [default: None]
+        :param err_log: (TextIO, str or None) a log file where to write the shell stderr [default: None]
+        :param time: (float) time interval to check the streams for output, prevent core blocking [default: 0.0001]
+        :param timing: (bool) wether to time the commands or not [default: True]
+        :param shell_cmd: (str) the command of the passed on the to the Popen to create the subprocess [default: /bin/bash]
+        """
         super(Shell, self).__init__()
         self._shell_cmd: str = shell_cmd
         self._shell_handle: Popen = Popen(shlex.split(self._shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
         self._shell_stdin: TextIO = TextIOWrapper(self._shell_handle.stdin, encoding='utf-8')
         self._shell_stdout: TextIO = TextIOWrapper(self._shell_handle.stdout, encoding='utf-8')
         self._shell_stderr: TextIO = TextIOWrapper(self._shell_handle.stderr, encoding='utf-8')
-        self._shell: Tuple[Popen, TextIO, TextIO, TextIO] = (self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
+        self._shell: Tuple[Popen, TextIO, TextIO, TextIO] = (
+        self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
         self._restart: bool = restart
         self._time: float = time
         self._timing: float = timing
@@ -110,8 +123,10 @@ class Shell(LoggerMixin):
         self._output_hook: Event = Event()
         self._error_hook: Event = Event()
         self._input_hook: Event = Event()
-        self._started_handler: EventHandler = EventHandler('run_block_started_handler', self._set_current_command_active)
-        self._finished_handler: EventHandler = EventHandler('run_block_finished_handler', self._set_current_command_finished)
+        self._started_handler: EventHandler = EventHandler('run_block_started_handler',
+                                                           self._set_current_command_active)
+        self._finished_handler: EventHandler = EventHandler('run_block_finished_handler',
+                                                            self._set_current_command_finished)
         self.command_started.set_event_handler(self._started_handler)
         self.command_finished.set_event_handler(self._finished_handler)
         self._remaining_commands: List[Tuple] = []  # local buffer for batch execution
