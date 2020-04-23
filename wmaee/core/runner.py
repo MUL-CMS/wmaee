@@ -12,7 +12,7 @@ from os import getcwd
 from time import sleep, time as current_time
 from io import TextIOWrapper, StringIO
 from threading import Thread, Event as ThreadingEvent
-
+from typing import Union, Optional, NoReturn, TextIO
 
 try:
     from queue import Queue, Empty
@@ -64,106 +64,21 @@ def get_vasp_configuration(application=None, hostname=None, partition=None):
     return preamble, command, binary
 
 
-def _shell_alive(shell_handle):
-    """
-    Thest wether a shell is still open
-    :param shell_handle: (subprocess.Popen) the process handle
-    :return: (bool) a boolean flag indicating if the shell is still opened
-    """
-    return shell_handle and not isinstance(shell_handle.poll(), int)
-
-
-def _send_command(shell, cmd, return_stdout=False, propagate_stdout=True):
-    """
-    Execute a command on a system shell and return the output
-    :param shell: (subprocess.Popen, subprocess.PIPE, subprocess.PIPE, StringStream) the process handles and output pipes
-    :param cmd: (str) the command to execute
-    :param return_stdout: (bool) wether to return the commands output (default: False)
-    :param propagate_stdout: (bool) wether to send the commands output to the shell_output pipe (default: True)
-    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
-    """
-    shell_handle, shell_stdin, shell_stdout, shell_output = shell
-    shell_input = shell_stdin
-    if not _shell_alive(shell_handle):
-        raise RuntimeError('Shell is not open')
-
-    finish = '__local_command_finish_mark__'
-    # self._shell_stdin.write(cmd + '\n')
-    echo_cmd = 'echo {} $?\n'.format(finish)
-    command = cmd.strip('\n')
-    shell_input.write('; '.join([cmd, echo_cmd]))
-    # Very important - flush() otherwise nothing will happen and the reader thread will get stuck in an infinite
-    shell_input.flush()
-
-    shout = []
-    exit_status = 0
-    for line in shell_stdout:
-        if finish in line:
-            try:
-                mark, code = line.lstrip().rstrip().split(' ')
-                exit_status = int(code)
-                assert mark == finish
-            except:
-                shout.append(line)
-                if propagate_stdout:
-                    shell_output.write(line)
-                    shell_stdout.flush()
-            else:
-                break
-        else:
-            shout.append(line)
-            if propagate_stdout:
-                shell_output.write(line)
-                shell_stdout.flush()
-    return exit_status == 0 if not return_stdout else (exit_status == 0, shout)
-
-
-def _read_output(shell, log_file, show_output, time):
-    """
-    Reads the output of until __END_MARK__ is reached, terminates by returning the exit code
-    :param shell: (subprocess.PIPE or StringStream) the shell output handle
-    :param log_file: (file) the filehandle to the log file
-    :param show_output: (bool) wether to print the output to sys.stdout
-    :return: (int) the exitcode
-    """
-    _, _, _, f = shell
-    line = f.readline()
-    log_file.write(line)
-    if show_output:
-        print(line, end='')
-    while __END_MARK__ not in line.strip():
-        line = f.readline()
-        if line:
-            log_file.write(line)
-            if show_output:
-                if __END_MARK__ not in line:
-                    print(line, end='')
-            # sleep here otherwise the thread will use 100% cpu power
-        sleep(time)
-        # If everything worked old_line should contain the exit status
-    line, exitcode = line.strip().split(' ')
-    log_file.flush()
-    try:
-        exitcode = int(exitcode)
-    except ValueError:
-        log_file.close()
-        return None
-    else:
-        log_file.close()
-        return exitcode
-
-
 class Shell(LoggerMixin):
     __instance = None
 
-    def __init__(self, restart=True, stdout=sys.stdout, stderr=sys.stderr, stdin=None, out_log=None, err_log=None,
-                 time=0.0001, timing=True, shell_cmd='/bin/bash'):
+    def __init__(self, restart: Optional[bool] = True, stdout: Optional[Union[None, TextIO]] = sys.stdout,
+                 stderr: Optional[Union[None, TextIO]] = sys.stderr,
+                 stdin: Optional[Union[None, TextIO]] = None, out_log: Optional[Union[None, TextIO]] = None,
+                 err_log: Optional[Union[None, TextIO]] = None, time: Optional[float] = 0.0001,
+                 timing: Optional[bool] = True, shell_cmd: Optional[str] = '/bin/bash'):
         super(Shell, self).__init__()
-        self.shell_handle = Popen(shlex.split(shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        self.shell_stdin = TextIOWrapper(self.shell_handle.stdin, encoding='utf-8')
-        self.shell_stdout = TextIOWrapper(self.shell_handle.stdout, encoding='utf-8')
-        self.shell_stderr = TextIOWrapper(self.shell_handle.stderr, encoding='utf-8')
-        self.shell = (self.shell_handle, self.shell_stdin, self.shell_stdout, self.shell_stderr)
+        self._shell_cmd = shell_cmd
+        self._shell_handle = Popen(shlex.split(self._shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        self._shell_stdin = TextIOWrapper(self._shell_handle.stdin, encoding='utf-8')
+        self._shell_stdout = TextIOWrapper(self._shell_handle.stdout, encoding='utf-8')
+        self._shell_stderr = TextIOWrapper(self._shell_handle.stderr, encoding='utf-8')
+        self._shell = (self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
         self._restart = restart
         self._time = time
         self._timing = timing
@@ -182,7 +97,7 @@ class Shell(LoggerMixin):
         self._close = ThreadingEvent()
         self._cmd_active = ThreadingEvent()
         self._cmd_data = None
-        streams = (self.shell_stdout, self.shell_stderr)
+        streams = (self._shell_stdout, self._shell_stderr)
         self._queues = [Queue() for _ in streams]
         self._threads = []
         self._finish_mark = '__local_command_finish_mark__'
@@ -192,7 +107,6 @@ class Shell(LoggerMixin):
             self._threads.append(thread)
             thread.start()
 
-        # TODO: Implement command listening and output buffering in distributor thread
         self._output_hook = Event()
         self._error_hook = Event()
         self._input_hook = Event()
@@ -213,12 +127,17 @@ class Shell(LoggerMixin):
             self.error_streams.append(self._stderr)
         if self._err_log_fd is not None:
             self.error_streams.append(self._err_log_fd)
-        self.input_streams = [self.shell_stdin]
+        self.input_streams = [self._shell_stdin]
 
         self._thr_dist = Thread(target=self._distribute)
         self._thr_dist.start()
 
-    def _enqueue_output(self, out, queue):
+    def _enqueue_output(self, out : TextIO, queue: Queue) -> NoReturn:
+        """
+        Function to wrap streams into queues to allow for non-blocking I/O
+        :param out: (TextIO) the stream used for non-blocking I/O
+        :param queue: (Queue) the queue where the stream will be forwarded to
+        """
         self.logger.debug('Forwarder thread started')
         for line in iter(out.readline, ''):
             # keep forwarding if command is active, as long as commands are in the queue
@@ -286,11 +205,18 @@ class Shell(LoggerMixin):
 
     @classmethod
     def get(cls):
+        """
+        Getter for the global static Shell instance
+        :return: (Shell) the global shell instance
+        """
         if cls.__instance is None:
             cls.__instance = Shell()
         return cls.__instance
 
-    def restart(self):
+    def restart(self) -> NoReturn:
+        """
+        Restarts the shell, calls the constructor again, if the current shell is not alive
+        """
         if not self.alive:
             self.close()
             # now restart the shell, and initialize everything
@@ -301,9 +227,15 @@ class Shell(LoggerMixin):
                           out_log=self._out_log_fd,
                           err_log=self._err_log_fd,
                           time=self._time,
-                          timing=self._timing)
+                          timing=self._timing,
+                          shell_cmd=self._shell_cmd)
 
-    def _send_command(self, cmd, raw=False):
+    def _send_command(self, cmd : str, raw: Optional[bool] = False) -> Union[None, int]:
+        """
+        Sends a command to the input stream, and generates the meta-data for the execution
+        :param cmd: (str) the command to execute
+        :param raw: (bool) if False the command will be executed silently and does not show up in the history
+        """
         if self._restart:
             self.restart()
         if cmd.endswith('\n'):
@@ -322,11 +254,11 @@ class Shell(LoggerMixin):
             echo_cmd = 'echo {} $?\n'.format(self._finish_mark)
             cmd = '; '.join([cmd, echo_cmd])
 
-        self.shell_stdin.write(cmd)
+        self._shell_stdin.write(cmd)
         if not raw:
             # we want to execute this line after we have written the command to the stdin
             self.command_started.fire(*cmd_data)
-        self.shell_stdin.flush()
+        self._shell_stdin.flush()
         return cmd_id if not raw else None
 
     def _set_current_command_active(self, *args):
@@ -338,7 +270,11 @@ class Shell(LoggerMixin):
             self._remaining_commands.append(args)
             # raise RuntimeError('It is not possible to run shell commands on parallel')
 
-    def _set_current_command_finished(self, *args):
+    def _set_current_command_finished(self, *args) -> NoReturn:
+        """
+        Internal handler function for the command_finished Event
+        :param args: (tuple) represents the command data
+        """
         cmd_id, cmd = args[:2]
         if not self._cmd_active.is_set():
             raise RuntimeError('No command is currently active')
@@ -366,11 +302,24 @@ class Shell(LoggerMixin):
             else:
                 self.logger.warning('The command %i:"%s" finished although no listener was registered' % (cmd_id, cmd))
 
-    def _block_until_command_finished(self):
+    def _block_until_command_finished(self) -> NoReturn:
+        """
+        Simple blocker function, which waits for a threading.Event to be set
+        """
         while self._cmd_active.is_set():
             sleep(self._time)
 
-    def _get_next_cmd_id(self):
+    def _shell_alive(self) -> bool:
+        """
+        Thest wether a shell is still open or not
+        """
+        return self._shell_handle and not isinstance(self._shell_handle.poll(), int)
+
+    def _get_next_cmd_id(self) -> int:
+        """
+        Computes the next cmd id fot the nex command
+        :return: (int) the command id
+        """
         return len(self._history) + self._command_queue.qsize()
 
     def run(self, cmd, block=True, output=None, error=None, return_out=False, return_err=False, return_id=True, return_exit=False):
@@ -380,11 +329,13 @@ class Shell(LoggerMixin):
         out_buffers = [StringIO() for _ in cmd] if return_out else []
         cmd_ids = []
         exit_codes = []
+
         def exit_code_extractor(cmd_id):
             def _handler(other_id, *args):
                 if cmd_id == other_id:
                     exit_codes.append(args[-1])
-            return  _handler
+            return _handler
+
         if any((return_out, return_err, return_exit)) and not block:
             block = True
             self.logger.warning(
@@ -452,7 +403,7 @@ class Shell(LoggerMixin):
 
     @property
     def alive(self):
-        return _shell_alive(self.shell_handle)
+        return self._shell_alive()
 
     @property
     def history(self):
