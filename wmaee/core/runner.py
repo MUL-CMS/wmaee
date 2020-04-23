@@ -373,16 +373,22 @@ class Shell(LoggerMixin):
     def _get_next_cmd_id(self):
         return len(self._history) + self._command_queue.qsize()
 
-    def run(self, cmd, block=True, output=None, error=None, return_out=False, return_err=False, return_id=True):
+    def run(self, cmd, block=True, output=None, error=None, return_out=False, return_err=False, return_id=True, return_exit=False):
         propagator = lambda stream: lambda line: stream.write(line)
         cmd = collection(cmd)
         err_buffers = [StringIO() for _ in cmd] if return_err else []
         out_buffers = [StringIO() for _ in cmd] if return_out else []
         cmd_ids = []
-        if any((return_out, return_err)) and not block:
+        exit_codes = []
+        def exit_code_extractor(cmd_id):
+            def _handler(other_id, *args):
+                if cmd_id == other_id:
+                    exit_codes.append(args[-1])
+            return  _handler
+        if any((return_out, return_err, return_exit)) and not block:
             block = True
             self.logger.warning(
-                'The "return_err" and "return_out" keyword argument cannot be used in combination with block=False. '
+                'The "return_exit", "return_err" and "return_out" keyword argument cannot be used in combination with block=False. '
                 'The settings will be overridden!')
 
         for i, command in enumerate(cmd):
@@ -414,9 +420,18 @@ class Shell(LoggerMixin):
                 else:
                     self._error_hooks[next_cmd_id].append(return_err_handler)
                 self._error_hook.add_event_handler(return_err_handler)
+            if return_exit:
+                exit_handler_name = 'run_exit_handler_%i' % next_cmd_id
+                self.command_finished.add_event_handler(EventHandler(exit_handler_name, exit_code_extractor(next_cmd_id)))
+                exit_code_length = len(exit_codes)
             self._send_command(command)
             if block:
                 self._block_until_command_finished()
+            if return_exit:
+                print(exit_code_length, len(exit_codes))
+                self.command_finished.remove_event_handler(exit_handler_name)
+                assert len(exit_codes) - exit_code_length == 1
+            # now exit codes must be longer by exactly one command
             cmd_ids.append(next_cmd_id)
 
         if return_out:
@@ -428,7 +443,7 @@ class Shell(LoggerMixin):
                 err_buf.seek(0)
             err_buffers = [err_buf.getvalue() for err_buf in err_buffers]
         if any((return_err, return_out, return_id)):
-            r = [data for data, b in zip((cmd_ids, out_buffers, err_buffers), (return_id, return_out, return_err)) if b]
+            r = [data for data, b in zip((cmd_ids, out_buffers, err_buffers, exit_codes), (return_id, return_out, return_err, return_exit)) if b]
             r = list(zip(*r))
             return unpack_single(r)
 
@@ -492,14 +507,9 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         change_command = 'cd {}'.format(getcwd())
 
         with Shell(stdout=sys.stdout if show_output else None, stderr=sys.stderr) as shell:
-            shell.show_output = False
-            shell.propagate_output = False
-            shell.run(change_command, return_stdout=False)
-            shell.propagate_output = True
-            shell.show_output = show_output
-            for preamble_ in preamble:
-                shell.run(preamble_, return_stdout=False)
-            output = shell.run(command, return_stdout=return_stdout)
+            shell.run(change_command)
+            shell.run(preamble)
+            output = shell.run(command, return_out=return_stdout)
 
         if return_stdout:
             exitcode, output = output
