@@ -12,7 +12,7 @@ from os import getcwd
 from time import sleep, time as current_time
 from io import TextIOWrapper, StringIO
 from threading import Thread, Event as ThreadingEvent
-from typing import Union, Optional, NoReturn, TextIO, Collection, Iterator
+from typing import Union, Optional, NoReturn, TextIO, Collection, Iterator, Tuple, List, Dict
 
 try:
     from queue import Queue, Empty
@@ -73,63 +73,63 @@ class Shell(LoggerMixin):
                  err_log: Optional[Union[None, TextIO]] = None, time: Optional[float] = 0.0001,
                  timing: Optional[bool] = True, shell_cmd: Optional[str] = '/bin/bash'):
         super(Shell, self).__init__()
-        self._shell_cmd = shell_cmd
-        self._shell_handle = Popen(shlex.split(self._shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        self._shell_stdin = TextIOWrapper(self._shell_handle.stdin, encoding='utf-8')
-        self._shell_stdout = TextIOWrapper(self._shell_handle.stdout, encoding='utf-8')
-        self._shell_stderr = TextIOWrapper(self._shell_handle.stderr, encoding='utf-8')
-        self._shell = (self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
-        self._restart = restart
-        self._time = time
-        self._timing = timing
-        self._command_queue = Queue()
-        self.command_finished = Event()
-        self.command_started = Event()
-        self._out_log_fd = open('%s.err.log' % out_log, 'w') if isinstance(out_log, str) else out_log
-        self._err_log_fd = open('%s.err.log' % err_log, 'w') if isinstance(err_log, str) else err_log
-        self._history = []
+        self._shell_cmd: str = shell_cmd
+        self._shell_handle: Popen = Popen(shlex.split(self._shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        self._shell_stdin: TextIO = TextIOWrapper(self._shell_handle.stdin, encoding='utf-8')
+        self._shell_stdout: TextIO = TextIOWrapper(self._shell_handle.stdout, encoding='utf-8')
+        self._shell_stderr: TextIO = TextIOWrapper(self._shell_handle.stderr, encoding='utf-8')
+        self._shell: Tuple[Popen, TextIO, TextIO, TextIO] = (self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
+        self._restart: bool = restart
+        self._time: float = time
+        self._timing: float = timing
+        self._command_queue: Queue = Queue()
+        self.command_finished: Event = Event()
+        self.command_started: Event = Event()
+        self._out_log_fd: TextIO = open('%s.err.log' % out_log, 'w') if isinstance(out_log, str) else out_log
+        self._err_log_fd: TextIO = open('%s.err.log' % err_log, 'w') if isinstance(err_log, str) else err_log
+        self._history: Collection[Tuple] = []
         if stdin is None:
             self._default_stdin = StringIO()
             stdin = self._default_stdin
-        self._stdin = stdin
-        self._stderr = stderr
-        self._stdout = stdout
-        self._close = ThreadingEvent()
-        self._cmd_active = ThreadingEvent()
-        self._cmd_data = None
+        self._stdin: Union[TextIO, None] = stdin
+        self._stderr: Union[TextIO, None] = stderr
+        self._stdout: Union[TextIO, None] = stdout
+        self._close: ThreadingEvent = ThreadingEvent()
+        self._cmd_active: ThreadingEvent = ThreadingEvent()
+        self._cmd_data: Union[None, Tuple] = None
         streams = (self._shell_stdout, self._shell_stderr)
-        self._queues = [Queue() for _ in streams]
-        self._threads = []
-        self._finish_mark = '__local_command_finish_mark__'
+        self._queues: Collection[Queue] = [Queue() for _ in streams]
+        self._threads: List[Thread] = []
+        self._finish_mark: str = '__local_command_finish_mark__'
         for queue, stream in zip(self._queues, streams):
             thread = Thread(target=self._enqueue_output, args=(stream, queue))
             thread.daemon = True
             self._threads.append(thread)
             thread.start()
 
-        self._output_hook = Event()
-        self._error_hook = Event()
-        self._input_hook = Event()
-        self._started_handler = EventHandler('run_block_started_handler', self._set_current_command_active)
-        self._finished_handler = EventHandler('run_block_finished_handler', self._set_current_command_finished)
+        self._output_hook: Event = Event()
+        self._error_hook: Event = Event()
+        self._input_hook: Event = Event()
+        self._started_handler: EventHandler = EventHandler('run_block_started_handler', self._set_current_command_active)
+        self._finished_handler: EventHandler = EventHandler('run_block_finished_handler', self._set_current_command_finished)
         self.command_started.set_event_handler(self._started_handler)
         self.command_finished.set_event_handler(self._finished_handler)
-        self._remaining_commands = []  # local buffer for batch execution
-        self._output_hooks = {}
-        self._error_hooks = {}
-        self.output_streams = []
+        self._remaining_commands: List[Tuple] = []  # local buffer for batch execution
+        self._output_hooks: Dict[int, List[EventHandler]] = {}
+        self._error_hooks: Dict[int, List[EventHandler]] = {}
+        self.output_streams: List[TextIO] = []
+        self.error_streams: List[TextIO] = []
         if self._stdout is not None:
             self.output_streams.append(self._stdout)
         if self._out_log_fd is not None:
             self.output_streams.append(self._out_log_fd)
-        self.error_streams = []
         if self._stderr is not None:
             self.error_streams.append(self._stderr)
         if self._err_log_fd is not None:
             self.error_streams.append(self._err_log_fd)
-        self.input_streams = [self._shell_stdin]
+        self.input_streams: List[TextIO] = [self._shell_stdin]
 
-        self._thr_dist = Thread(target=self._distribute)
+        self._thr_dist: Thread = Thread(target=self._distribute)
         self._thr_dist.start()
 
     def _enqueue_output(self, out: TextIO, queue: Queue) -> NoReturn:
