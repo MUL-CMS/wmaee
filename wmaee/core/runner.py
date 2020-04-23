@@ -512,13 +512,12 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
         preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname,
                                                            partition=partition)
         command = command.format(cores=cpus, binary=binary)
-        echo_cmd = 'echo "{} $?"'.format(__END_MARK__)
         change_command = 'cd {}'.format(getcwd())
 
         with Shell(stdout=sys.stdout if show_output else None, stderr=sys.stderr) as shell:
             shell.run(change_command)
             shell.run(preamble)
-            output = shell.run(command, return_out=return_stdout)
+            output = shell.run(command, return_out=return_stdout, return_exit=True)
 
         if return_stdout:
             exitcode, output = output
