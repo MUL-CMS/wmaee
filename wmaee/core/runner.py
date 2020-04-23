@@ -398,7 +398,6 @@ class Shell(LoggerMixin):
             if block:
                 self._block_until_command_finished()
             if return_exit:
-                print(exit_code_length, len(exit_codes))
                 self.command_finished.remove_event_handler(exit_handler_name)
                 assert len(exit_codes) - exit_code_length == 1
             # now exit codes must be longer by exactly one command
@@ -519,14 +518,14 @@ def _run_vasp_internal(directory=None, cpus=2, show_output=True, return_stdout=F
             shell.run(preamble)
             output = shell.run(command, return_out=return_stdout, return_exit=True)
 
+        print(output)
         if return_stdout:
-            exitcode, output = output
+            _, exitcode, output = output
         else:
-            exitcode = output
+            _, exitcode = output
 
-        if not exitcode:
+        if not exitcode != 0:
             logger.warning('VASP did not execute successfully! Exit-Code: "{}"'.format(exitcode))
-            return
 
         return exitcode if not return_stdout else (exitcode, output)
         # Write input files
