@@ -206,14 +206,19 @@ class Shell(LoggerMixin):
                             for stream in s:
                                 stream.write(line)
                             # if a command is active we write it to the hooks
-                            if self._timing:
-                                cmd_id, _, _ = self._cmd_data
+                            # if self._cmd_data for None
+                            if self._cmd_data is not None:
+                                if self._timing:
+                                    cmd_id, _, _ = self._cmd_data
+                                else:
+                                    cmd_id, _ = self._cmd_data
                             else:
-                                cmd_id, _ = self._cmd_data
+                                cmd_id = None
 
-                            if cmd_id in hks:
-                                for hndlr in hks[cmd_id]:
-                                    hk.fire_handler(hndlr.name, line)
+                            if cmd_id is not None:
+                                if cmd_id in hks:
+                                    for hndlr in hks[cmd_id]:
+                                        hk.fire_handler(hndlr.name, line)
                     else:
                         # try the next queue
                         sleep(self._time)
