@@ -1,11 +1,16 @@
 from ase import Atoms
 from pymatgen import Structure
 from wmaee.utils import pymatgen_to_ase
+from typing import Union, Optional
 
-def view(structure, spacefill=True, show_cell=True, camera='perspective', particle_size=0.5, background='white', color_scheme='element', show_axes=True):
+
+def view(structure: Union[Structure, Atoms], spacefill: Optional[bool] = True, show_cell: Optional[bool] = True,
+         camera: Optional[str] = 'perspective', particle_size: Optional[float] = 0.5,
+         background: Optional[str] = 'white', color_scheme: Optional[str] = 'element',
+         show_axes: Optional[bool] = True):
     """
     Constructs a nglview view to display a structure
-    :param structure: (pymatgen.Structure, ase.Atoms) the structure to display
+    :param structure: (pymatgen.Structure or ase.Atoms) the structure to display
     :param spacefill: (bool) to set the atoms size to spacefilling (default: True)
     :param show_cell:  (bool) wether to draw the unit cell or not (default: True)
     :param camera: (str) which camera projections to use 'perspective' or 'orthographic' (default: 'perspective')
@@ -25,7 +30,7 @@ def view(structure, spacefill=True, show_cell=True, camera='perspective', partic
         atoms = pymatgen_to_ase(structure)
     else:
         raise TypeError
-    view_  = nglview.show_ase(atoms)
+    view_ = nglview.show_ase(atoms)
     if spacefill:
         view_.add_spacefill(radius_type='vdw', color_scheme=color_scheme, radius=particle_size)
         # view.add_spacefill(radius=1.0)

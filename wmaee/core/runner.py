@@ -65,6 +65,7 @@ def get_vasp_configuration(application=None, hostname=None, partition=None):
 
 
 class Shell(LoggerMixin):
+
     __instance = None
 
     def __init__(self, restart: Optional[bool] = True, stdout: Optional[Union[None, TextIO]] = sys.stdout,
