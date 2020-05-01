@@ -1,6 +1,6 @@
 from wmaee.core.common import LoggerMixin
 from wmaee.utils import to_pyiron
-from typing import Union, Optional, Dict, Collection, NoReturn, List
+from typing import Union, Optional, Dict, Collection, NoReturn, List, Generator, Tuple
 from ase import Atoms as AseAtoms
 from pyiron.atomistics.structure.atoms import Atoms as IronAtoms
 from pyiron.base.settings.generic import Settings
@@ -9,6 +9,7 @@ from pymatgen import Structure, Lattice
 from pandas import DataFrame
 from uuid import uuid4
 from os import getcwd
+from numpy import ndarray
 import logging
 
 
@@ -223,11 +224,19 @@ class LAMMPSCalculation(LoggerMixin):
         self._pyiron_job.run()
 
     @property
-    def steps(self):
+    def steps(self) -> ndarray:
+        """
+        Get's the number of step ids
+        :return: (numpy.ndarray) the step ids
+        """
         return self._pyiron_job['output/generic/time']
 
     @property
-    def forces(self):
+    def forces(self) -> Generator[Tuple[int, ndarray]]:
+        """
+        Yields for each step the step id and the corresponding forces
+        :return: (Generator(tuple(int, numpy.ndarray)) the generator object
+        """
         for step, fcs in zip(self.steps, self._pyiron_job['output/generic/forces']):
             yield step, fcs
 
@@ -236,7 +245,11 @@ class LAMMPSCalculation(LoggerMixin):
         return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/forces'][-1]
 
     @property
-    def positions(self):
+    def positions(self) -> Generator[Tuple[int, ndarray]]:
+        """
+        Yields for each step the step id and the corresponding array of positions
+        :return: (Generator(tuple(int, numpy.ndarray)) the generator object
+        """
         for step, pos in zip(self.steps, self._pyiron_job['output/generic/positions']):
             yield step, pos
 
@@ -245,7 +258,11 @@ class LAMMPSCalculation(LoggerMixin):
         return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/positions'][-1]
 
     @property
-    def structures(self):
+    def structures(self) -> Generator[Tuple[int, Structure]]:
+        """
+        Yields for each step the step id and the corresponding structure
+        :return: (Generator(tuple(int, Structure)) the generator object
+        """
         species_list = self._pyiron_job.structure.get_chemical_symbols().tolist()
         for step, cell, positions in zip(self.steps, self._pyiron_job['output/generic/cells'],  self._pyiron_job['output/generic/positions']):
             yield step, Structure(Lattice(cell), species_list, positions, coords_are_cartesian=True)
@@ -256,7 +273,11 @@ class LAMMPSCalculation(LoggerMixin):
         return self._pyiron_job['output/generic/time'][-1], Structure(Lattice(self._pyiron_job['output/generic/cells'][-1]), species_list, self._pyiron_job['output/generic/positions'][-1], coords_are_cartesian=True)
 
     @property
-    def volumes(self):
+    def volumes(self) -> Generator[Tuple[int, float]]:
+        """
+        Yields for each step the step id and the corresponding volumes
+        :return: (Generator(tuple(int, float)) the generator object
+        """
         for step, vol in zip(self.steps, self._pyiron_job['output/generic/volume']):
             yield step, vol
 
@@ -265,19 +286,35 @@ class LAMMPSCalculation(LoggerMixin):
         return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/volume'][-1]
 
     @property
-    def pressures(self):
+    def pressures(self) -> Generator[Tuple[int, ndarray]]:
+        """
+        Yields for each step the step id and the corresponding pressures
+        :return: (Generator(tuple(int, numpy.ndarray)) the generator object
+        """
         for step, pressure in zip(self.steps, self._pyiron_job['output/generic/pressures']):
             yield step, pressure
 
     @property
-    def final_pressure(self):
+    def final_pressure(self) -> Tuple[int, ndarray]:
+        """
+        Get's the final pressure of the calculation
+        :return: (tuple(int, numpy.ndarry)) the final step id and the pressure
+        """
         return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/pressures'][-1]
 
     @property
-    def energies(self):
+    def energies(self) -> Generator[Tuple[int, float]]:
+        """
+        Yields for each step the step id and the corresponding energy
+        :return: (Generator(tuple(int, float)) the generator object
+        """
         for step, energy in zip(self.steps, self._pyiron_job['output/generic/energy_pot']):
             yield step, energy
 
     @property
-    def final_energies(self):
+    def final_energies(self) -> Tuple[int, float]:
+        """
+        Get's the final energy of the calculation
+        :return: (tuple(int, float)) the last step number and corresponding energy
+        """
         return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/energy_pot'][-1]
