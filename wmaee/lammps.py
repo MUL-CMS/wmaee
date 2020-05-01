@@ -115,7 +115,7 @@ class LAMMPSInput(LoggerMixin):
            seed: Optional[Union[int, None]] = None, tloop=None,
            initial_temperature: Optional[Union[float, None]] = None,
            langevin: Optional[bool] = False, delta_temp: Optional[Union[float, None]] = None,
-           delta_press: Optional[Union[float, None]] = None):
+           delta_press: Optional[Union[float, None]] = None) -> NoReturn:
         """
         Set an MD calculation within LAMMPS. Nosé Hoover is used by default.
 
@@ -137,7 +137,7 @@ class LAMMPSInput(LoggerMixin):
 
     def minimize(self, e_tol: Optional[float] = 0.0, f_tol: Optional[float] = 1e-4, max_iter: Optional[int] = 100000,
                  pressure: Optional[Union[Collection, float]] = None, n_print: Optional[int] = 100,
-                 style: Optional[str] = 'cg'):
+                 style: Optional[str] = 'cg') -> NoReturn:
         """
         Sets parameters required for minimization.
         :param: e_tol: (float) If the magnitude of difference between energies of two consecutive steps is lower than or equal to `e_tol`, the minimisation terminates. (Default is 0.0 eV.)
@@ -156,7 +156,7 @@ class LAMMPSInput(LoggerMixin):
               time_step: Optional[float] = 1.0, n_print: Optional[int] = 100,
               temperature_damping_timescale: Optional[float] = 100.0,
               pressure_damping_timescale: Optional[float] = 1000.0, seed: Optional[Union[int, None]] = None,
-              initial_temperature: Optional[float, None] = None, langevin: Optional[bool] = False):
+              initial_temperature: Optional[float, None] = None, langevin: Optional[bool] = False) -> NoReturn:
         """
         Run variance-constrained semi-grand-canonical MD/MC for a binary system. In addition to VC-SGC arguments, all
         arguments for a regular MD calculation are also accepted.
@@ -189,3 +189,15 @@ class LAMMPSInput(LoggerMixin):
         :param initial_temperature: (None or float)  Initial temperature according to which the initial velocity field is created. If None, the initial temperature will be twice the target temperature (which would go immediately down to the target temperature as described in equipartition theorem). If 0, the velocity field is not initialized (in which case  the initial velocity given in structure will be used). If any other number is given, this value is going to be used for the initial temperature.
         :param langevin: (bool) (True or False) Activate Langevin dynamics
         """
+        self._pyiron_job.calc_vcsgc(mu=mu, ordered_element_list=ordered_element_list,
+                                    target_concentration=target_concentration, kappa=kappa,
+                                    mc_step_interval=mc_step_interval, swap_fraction=swap_fraction,
+                                    temperature_mc=temperature_mc, window_size=window_size, window_moves=window_moves,
+                                    temperature=temperature, pressure=pressure, n_ionic_steps=n_ionic_steps,
+                                    time_step=n_ionic_steps, n_print=n_print,
+                                    temperature_damping_timescale=temperature_damping_timescale,
+                                    pressure_damping_timescale=pressure_damping_timescale, seed=seed,
+                                    initial_temperature=initial_temperature, langevin=langevin, job_name="")
+
+    def static(self):
+        self._pyiron_job.calc_static()
