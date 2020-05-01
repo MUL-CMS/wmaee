@@ -1,10 +1,11 @@
 from pymatgen.io.ase import AseAtomsAdaptor
 from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, \
     pyiron_to_pymatgen, pymatgen_to_pyiron, Atoms as IronAtoms
-from collections.abc import Iterable
+from typing import Any, Collection
 from pymatgen import Structure
 from ase import Atoms as AseAtoms
-from typing import Union
+from typing import Union, Callable
+from functools import wraps
 
 
 def to_ase(s: Union[Structure, AseAtoms, IronAtoms]) -> AseAtoms:
@@ -70,9 +71,27 @@ def ase_to_pymatgen(atoms: AseAtoms) -> Structure:
     return AseAtomsAdaptor.get_structure(atoms)
 
 
-def collection(a):
+def collection(a: Any) -> Collection[Any]:
+    """
+    Wraps an object into a collection if the object is not a collection
+    :param a: (Any) the object to wrap or a collection
+    :return: (list of Any) the wrapped object
+    """
     return [a] if isinstance(a, str) else (a if isinstance(a, (set, list, tuple)) else [a])
 
 
 def unpack_single(a):
     return a[0] if len(a) == 1 else a
+
+
+def add_method(cls: type) -> Callable:
+
+    def decorator(func: Callable) -> Callable:
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(*args, **kwargs)
+        setattr(cls, func.__name__, wrapper)
+        # Note we are not binding func, but wrapper which accepts self but does exactly the same as func
+        return func # returning func means func can still be used normally
+    return decorator

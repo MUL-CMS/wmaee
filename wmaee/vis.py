@@ -1,52 +1,44 @@
-from ase import Atoms
+from ase import Atoms as AseAtoms
+from pyiron.atomistics.structure.atoms import Atoms as IronAtoms
 from pymatgen import Structure
 from wmaee.utils import pymatgen_to_ase
-from typing import Union, Optional
+from typing import Union, Optional, Any
+from numpy import ndarray
+try:
+    from nglview import NGLWidget
+except ImportError:
+    raise
 
 
-def view(structure: Union[Structure, Atoms], spacefill: Optional[bool] = True, show_cell: Optional[bool] = True,
-         camera: Optional[str] = 'perspective', particle_size: Optional[float] = 0.5,
-         background: Optional[str] = 'white', color_scheme: Optional[str] = 'element',
-         show_axes: Optional[bool] = True):
+def view(structure: Union[Structure, AseAtoms, IronAtoms], show_cell: Optional[bool]=True, show_axes: Optional[bool]=True, camera: Optional[str]='orthographic', spacefill: Optional[bool]=True, particle_size: Optional[float]=1.0, select_atoms: Optional[Union[None, ndarray]]=None, background: Optional[str]='white', color_scheme: Optional[Union[None, str]]=None, colors: Optional[Union[None, ndarray]]=None, scalar_field: Optional[Union[None, ndarray]]=None, scalar_start: Optional[Union[None, float]]=None, scalar_end: Optional[Union[None, float]]=None, scalar_cmap: Optional[Any]=None, vector_field: Optional[Union[None, ndarray]]=None, vector_color: Optional[Union[None, ndarray]]=None, custom_array: Optional[Union[None, ndarray]]=None, custom_3darray: Optional[Union[None, ndarray]]=None):
     """
-    Constructs a nglview view to display a structure
-    :param structure: (pymatgen.Structure or ase.Atoms) the structure to display
-    :param spacefill: (bool) to set the atoms size to spacefilling (default: True)
-    :param show_cell:  (bool) wether to draw the unit cell or not (default: True)
-    :param camera: (str) which camera projections to use 'perspective' or 'orthographic' (default: 'perspective')
-    :param particle_size: (float) the size of the atoms (default: 0.5)
-    :param background: (str) the name of the background color (default: 'white')
-    :param color_scheme: (str) the name of the coloring scheme. Please refer to nglview documentation (default: 'element')
-    :param show_axes: (bool) wether to draw the coordinate system of the unit cell (default: True)
-    :return: (nglview.View) view wrapper
+    Plot3d relies on NGLView to visualize atomic structures. Here, we construct a string in the "protein database"
+    ("pdb") format, then turn it into an NGLView "structure". PDB is a white-space sensitive format, so the
+    string snippets are carefully formatted.
+    The final widget is returned. If it is assigned to a variable, the visualization is suppressed until that
+    variable is evaluated, and in the meantime more NGL operations can be applied to it to modify the visualization.
+
+    :param show_cell: (bool) Whether or not to show the frame. (Default is True.)
+    :param show_axes: (bool) Whether or not to show xyz axes. (Default is True.)
+    :param camera: (str) 'perspective' or 'orthographic'. (Default is 'perspective'.)
+    :param spacefill: (bool) Whether to use a space-filling or ball-and-stick representation. (Default is True, use space-filling atoms.)
+    :param particle_size: (float) Size of the particles. (Default is 1.)
+    :param select_atoms: (numpy.ndarray) Indices of atoms to show, either as integers or a boolean array mask. (Default is None, show all atoms.)
+    :param background: (str) Background color. (Default is 'white'.)
+    :param color_scheme: (str) NGLView color scheme to use. (Default is None, color by element.)
+    :param colors: (numpy.ndarray) A per-atom array of HTML color names or hex color codes to use for atomic colors. (Default is None, use coloring scheme.)
+    :param scalar_field: (numpy.ndarray) Color each atom according to the array value (Default is None, use coloring scheme.)
+    :param scalar_start: (float) The scalar value to be mapped onto the low end of the color map (lower values are clipped). (Default is None, use the minimum value in `scalar_field`.)
+    :param scalar_end: (float) The scalar value to be mapped onto the high end of the color map (higher values are clipped). (Default is None, use the maximum value in `scalar_field`.)
+    :param scalar_cmap: (matplotlib.cm) The colormap to use. (Default is None, giving a blue-red divergent map.)
+    :param vector_field: (numpy.ndarray) Add vectors (3 values) originating at each atom. (Default is None, no vectors.)
+    :param vector_color: (numpy.ndarray) Colors for the vectors (only available with vector_field). (Default is None, vectors are colored by their direction.)
+    Possible NGLView color schemes
+          " ", "picking", "random", "uniform", "atomindex", "residueindex",
+          "chainindex", "modelindex", "sstruc", "element", "resname", "bfactor",
+          "hydrophobicity", "value", "volume", "occupancy"
+    :return (nglview.NGLWidget): The NGLView widget itself, which can be operated on further or viewed as-is.
+    Warnings:
+        * Many features only work with space-filling atoms (e.g. coloring by a scalar field).
+        * The colour interpretation of some hex codes is weird, e.g. 'green'.
     """
-    try:
-        import nglview
-    except ImportError:
-        raise ImportError('nglview is needed')
-    if isinstance(structure, Atoms):
-        atoms = structure
-    elif isinstance(structure, Structure):
-        atoms = pymatgen_to_ase(structure)
-    else:
-        raise TypeError
-    view_ = nglview.show_ase(atoms)
-    if spacefill:
-        view_.add_spacefill(radius_type='vdw', color_scheme=color_scheme, radius=particle_size)
-        # view.add_spacefill(radius=1.0)
-        view_.remove_ball_and_stick()
-    else:
-        view_.add_ball_and_stick()
-    if show_cell:
-        if atoms.cell is not None:
-            view_.add_unitcell()
-    if show_axes:
-        view_.shape.add_arrow([-2, -2, -2], [2, -2, -2], [1, 0, 0], 0.5)
-        view_.shape.add_arrow([-2, -2, -2], [-2, 2, -2], [0, 1, 0], 0.5)
-        view_.shape.add_arrow([-2, -2, -2], [-2, -2, 2], [0, 0, 1], 0.5)
-    if camera != 'perspective' and camera != 'orthographic':
-        print('Only perspective or orthographic is permitted')
-        return None
-    view_.camera = camera
-    view_.background = background
-    return view_
