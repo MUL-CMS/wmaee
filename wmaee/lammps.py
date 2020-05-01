@@ -112,7 +112,8 @@ class LAMMPSInput(LoggerMixin):
     def md(self, temperature: Optional[None, float] = None, pressure: Optional[None, float] = None,
            n_ionic_steps: Optional[int] = 1000, time_step: Optional[float] = 1.0, n_print: Optional[int] = 100,
            temperature_damping_timescale: Optional[int] = 100.0, pressure_damping_timescale: Optional[float] = 1000.0,
-           seed: Optional[Union[int, None]] = None, tloop=None, initial_temperature: Optional[Union[float, None]] = None,
+           seed: Optional[Union[int, None]] = None, tloop=None,
+           initial_temperature: Optional[Union[float, None]] = None,
            langevin: Optional[bool] = False, delta_temp: Optional[Union[float, None]] = None,
            delta_press: Optional[Union[float, None]] = None):
         """
@@ -147,25 +148,15 @@ class LAMMPSInput(LoggerMixin):
         """
         pass
 
-    def vcsgc(self, mu: Dict,
-        ordered_element_list: List,
-        target_concentration: Optional[Union[Dict, None]]=None,
-        kappa: Optional[int]=1000.,
-        mc_step_interval: Optional[int]=100,
-        swap_fraction: Optional[float]=0.1,
-        temperature_mc: Optional[float, None]=None,
-        window_size: Optional[float, None]=None,
-        window_moves: Optional[int, None]=None,
-        temperature: Optional[Union[None, float]]=None,
-        pressure: Optional[Union[None, float]]=None,
-        n_ionic_steps: Optional[int]=1000,
-        time_step: Optional[float]=1.0,
-        n_print: Optional[int]=100,
-        temperature_damping_timescale: Optional[float]=100.0,
-        pressure_damping_timescale: Optional[float]=1000.0,
-        seed: Optional[Union[int, None]]=None,
-        initial_temperature: Optional[float, None]=None,
-        langevin: Optional[bool]=False):
+    def vcsgc(self, mu: Dict, ordered_element_list: List, target_concentration: Optional[Union[Dict, None]] = None,
+              kappa: Optional[int] = 1000., mc_step_interval: Optional[int] = 100, swap_fraction: Optional[float] = 0.1,
+              temperature_mc: Optional[float, None] = None, window_size: Optional[float, None] = None,
+              window_moves: Optional[int, None] = None, temperature: Optional[Union[None, float]] = None,
+              pressure: Optional[Union[None, float]] = None, n_ionic_steps: Optional[int] = 1000,
+              time_step: Optional[float] = 1.0, n_print: Optional[int] = 100,
+              temperature_damping_timescale: Optional[float] = 100.0,
+              pressure_damping_timescale: Optional[float] = 1000.0, seed: Optional[Union[int, None]] = None,
+              initial_temperature: Optional[float, None] = None, langevin: Optional[bool] = False):
         """
         Run variance-constrained semi-grand-canonical MD/MC for a binary system. In addition to VC-SGC arguments, all
         arguments for a regular MD calculation are also accepted.
