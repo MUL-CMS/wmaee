@@ -5,9 +5,10 @@ from ase import Atoms as AseAtoms
 from pyiron.atomistics.structure.atoms import Atoms as IronAtoms
 from pyiron.base.settings.generic import Settings
 from pyiron.project import Project
-from pymatgen import Structure
+from pymatgen import Structure, Lattice
 from pandas import DataFrame
 from uuid import uuid4
+from os import getcwd
 import logging
 
 
@@ -40,10 +41,20 @@ class LAMMPSCalculation(LoggerMixin):
             self.logger.info('The calculation was no given a name hence I\'ve chosen "%s" for you' % name)
 
         self._name = name
+        self._pyiron_settings_reference = Settings()
+        self._modify_pyiron_config()
         self._project_handle = Project(self._directory)
         self._pyiron_job = self._project_handle.create_job(self._project_handle.job_type.Lammps, self._name)
         self._pyiron_job.structure = to_pyiron(self._structure)
         self._pyiron_job.potential = self._potential
+
+    def _modify_pyiron_config(self):
+        """
+        Inserts the current directory into the pyiron configuration, so that pyiron can run jobs there
+        """
+        pwd = getcwd()
+        if pwd not in self._pyiron_settings_reference._configuration['project_paths']:
+            self._pyiron_settings_reference._configuration['project_paths'].append(pwd)
 
     @property
     def structure(self) -> Union[Structure, AseAtoms, IronAtoms]:
@@ -109,7 +120,7 @@ class LAMMPSCalculation(LoggerMixin):
                 str(list_of_elements),
             )
 
-    def md(self, temperature: Optional[None, float] = None, pressure: Optional[None, float] = None,
+    def md(self, temperature: Optional[Union[None, float]] = None, pressure: Optional[Union[None, float]] = None,
            n_ionic_steps: Optional[int] = 1000, time_step: Optional[float] = 1.0, n_print: Optional[int] = 100,
            temperature_damping_timescale: Optional[int] = 100.0, pressure_damping_timescale: Optional[float] = 1000.0,
            seed: Optional[Union[int, None]] = None, tloop=None,
@@ -156,13 +167,13 @@ class LAMMPSCalculation(LoggerMixin):
 
     def vcsgc(self, mu: Dict, ordered_element_list: List, target_concentration: Optional[Union[Dict, None]] = None,
               kappa: Optional[int] = 1000., mc_step_interval: Optional[int] = 100, swap_fraction: Optional[float] = 0.1,
-              temperature_mc: Optional[float, None] = None, window_size: Optional[float, None] = None,
-              window_moves: Optional[int, None] = None, temperature: Optional[Union[None, float]] = None,
+              temperature_mc: Optional[Union[float, None]] = None, window_size: Optional[Union[float, None]] = None,
+              window_moves: Optional[Union[int, None]] = None, temperature: Optional[Union[None, float]] = None,
               pressure: Optional[Union[None, float]] = None, n_ionic_steps: Optional[int] = 1000,
               time_step: Optional[float] = 1.0, n_print: Optional[int] = 100,
               temperature_damping_timescale: Optional[float] = 100.0,
               pressure_damping_timescale: Optional[float] = 1000.0, seed: Optional[Union[int, None]] = None,
-              initial_temperature: Optional[float, None] = None, langevin: Optional[bool] = False) -> NoReturn:
+              initial_temperature: Optional[Union[float, None]] = None, langevin: Optional[bool] = False) -> NoReturn:
         """
         Run variance-constrained semi-grand-canonical MD/MC for a binary system. In addition to VC-SGC arguments, all
         arguments for a regular MD calculation are also accepted.
@@ -207,3 +218,66 @@ class LAMMPSCalculation(LoggerMixin):
 
     def static(self):
         self._pyiron_job.calc_static()
+
+    def run(self):
+        self._pyiron_job.run()
+
+    @property
+    def steps(self):
+        return self._pyiron_job['output/generic/time']
+
+    @property
+    def forces(self):
+        for step, fcs in zip(self.steps, self._pyiron_job['output/generic/forces']):
+            yield step, fcs
+
+    @property
+    def final_forces(self):
+        return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/forces'][-1]
+
+    @property
+    def positions(self):
+        for step, pos in zip(self.steps, self._pyiron_job['output/generic/positions']):
+            yield step, pos
+
+    @property
+    def final_positions(self):
+        return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/positions'][-1]
+
+    @property
+    def structures(self):
+        species_list = self._pyiron_job.structure.get_chemical_symbols().tolist()
+        for step, cell, positions in zip(self.steps, self._pyiron_job['output/generic/cells'],  self._pyiron_job['output/generic/positions']):
+            yield step, Structure(Lattice(cell), species_list, positions, coords_are_cartesian=True)
+
+    @property
+    def final_structure(self):
+        species_list = self._pyiron_job.structure.get_chemical_symbols().tolist()
+        return self._pyiron_job['output/generic/time'][-1], Structure(Lattice(self._pyiron_job['output/generic/cells'][-1]), species_list, self._pyiron_job['output/generic/positions'][-1], coords_are_cartesian=True)
+
+    @property
+    def volumes(self):
+        for step, vol in zip(self.steps, self._pyiron_job['output/generic/volume']):
+            yield step, vol
+
+    @property
+    def final_volume(self):
+        return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/volume'][-1]
+
+    @property
+    def pressures(self):
+        for step, pressure in zip(self.steps, self._pyiron_job['output/generic/pressures']):
+            yield step, pressure
+
+    @property
+    def final_pressure(self):
+        return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/pressures'][-1]
+
+    @property
+    def energies(self):
+        for step, energy in zip(self.steps, self._pyiron_job['output/generic/energy_pot']):
+            yield step, energy
+
+    @property
+    def final_energies(self):
+        return self._pyiron_job['output/generic/time'][-1], self._pyiron_job['output/generic/energy_pot'][-1]
