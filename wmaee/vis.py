@@ -1,16 +1,25 @@
 from ase import Atoms as AseAtoms
 from pyiron.atomistics.structure.atoms import Atoms as IronAtoms
 from pymatgen import Structure
-from wmaee.utils import pymatgen_to_ase
+from wmaee.utils import to_pyiron, add_method as _hidden_add_method
 from typing import Union, Optional, Any
 from numpy import ndarray
+
 try:
     from nglview import NGLWidget
 except ImportError:
     raise
 
 
-def view(structure: Union[Structure, AseAtoms, IronAtoms], show_cell: Optional[bool]=True, show_axes: Optional[bool]=True, camera: Optional[str]='orthographic', spacefill: Optional[bool]=True, particle_size: Optional[float]=1.0, select_atoms: Optional[Union[None, ndarray]]=None, background: Optional[str]='white', color_scheme: Optional[Union[None, str]]=None, colors: Optional[Union[None, ndarray]]=None, scalar_field: Optional[Union[None, ndarray]]=None, scalar_start: Optional[Union[None, float]]=None, scalar_end: Optional[Union[None, float]]=None, scalar_cmap: Optional[Any]=None, vector_field: Optional[Union[None, ndarray]]=None, vector_color: Optional[Union[None, ndarray]]=None, custom_array: Optional[Union[None, ndarray]]=None, custom_3darray: Optional[Union[None, ndarray]]=None):
+def view(structure: Union[Structure, AseAtoms, IronAtoms], show_cell: Optional[bool] = True,
+         show_axes: Optional[bool] = True, camera: Optional[str] = 'orthographic', spacefill: Optional[bool] = True,
+         particle_size: Optional[float] = 1.0, select_atoms: Optional[Union[None, ndarray]] = None,
+         background: Optional[str] = 'white', color_scheme: Optional[Union[None, str]] = None,
+         colors: Optional[Union[None, ndarray]] = None, scalar_field: Optional[Union[None, ndarray]] = None,
+         scalar_start: Optional[Union[None, float]] = None, scalar_end: Optional[Union[None, float]] = None,
+         scalar_cmap: Optional[Any] = None, vector_field: Optional[Union[None, ndarray]] = None,
+         vector_color: Optional[Union[None, ndarray]] = None, custom_array: Optional[Union[None, ndarray]] = None,
+         custom_3darray: Optional[Union[None, ndarray]] = None):
     """
     Plot3d relies on NGLView to visualize atomic structures. Here, we construct a string in the "protein database"
     ("pdb") format, then turn it into an NGLView "structure". PDB is a white-space sensitive format, so the
@@ -42,3 +51,62 @@ def view(structure: Union[Structure, AseAtoms, IronAtoms], show_cell: Optional[b
         * Many features only work with space-filling atoms (e.g. coloring by a scalar field).
         * The colour interpretation of some hex codes is weird, e.g. 'green'.
     """
+    return to_pyiron(structure).plot3d(show_cell=show_cell, show_axes=show_axes, camera=camera, spacefill=spacefill,
+                                       particle_size=particle_size, select_atoms=select_atoms, background=background,
+                                       color_scheme=color_scheme, colors=colors, scalar_field=scalar_field,
+                                       scalar_start=scalar_start, scalar_end=scalar_end, scalar_cmap=scalar_cmap,
+                                       vector_color=vector_color, vector_field=vector_field,
+                                       custom_3darray=custom_3darray, custom_array=custom_array)
+
+_non_forward_view = view
+
+@_hidden_add_method(Structure, view.__doc__)
+def view(self, show_cell: Optional[bool] = True,
+         show_axes: Optional[bool] = True, camera: Optional[str] = 'orthographic', spacefill: Optional[bool] = True,
+         particle_size: Optional[float] = 1.0, select_atoms: Optional[Union[None, ndarray]] = None,
+         background: Optional[str] = 'white', color_scheme: Optional[Union[None, str]] = None,
+         colors: Optional[Union[None, ndarray]] = None, scalar_field: Optional[Union[None, ndarray]] = None,
+         scalar_start: Optional[Union[None, float]] = None, scalar_end: Optional[Union[None, float]] = None,
+         scalar_cmap: Optional[Any] = None, vector_field: Optional[Union[None, ndarray]] = None,
+         vector_color: Optional[Union[None, ndarray]] = None, custom_array: Optional[Union[None, ndarray]] = None,
+         custom_3darray: Optional[Union[None, ndarray]] = None):
+    return to_pyiron(self).plot3d(show_cell=show_cell, show_axes=show_axes, camera=camera, spacefill=spacefill,
+                                       particle_size=particle_size, select_atoms=select_atoms, background=background,
+                                       color_scheme=color_scheme, colors=colors, scalar_field=scalar_field,
+                                       scalar_start=scalar_start, scalar_end=scalar_end, scalar_cmap=scalar_cmap,
+                                       vector_color=vector_color, vector_field=vector_field,
+                                       custom_3darray=custom_3darray, custom_array=custom_array)
+
+@_hidden_add_method(AseAtoms, view.__doc__)
+def view(self, show_cell: Optional[bool] = True,
+         show_axes: Optional[bool] = True, camera: Optional[str] = 'orthographic', spacefill: Optional[bool] = True,
+         particle_size: Optional[float] = 1.0, select_atoms: Optional[Union[None, ndarray]] = None,
+         background: Optional[str] = 'white', color_scheme: Optional[Union[None, str]] = None,
+         colors: Optional[Union[None, ndarray]] = None, scalar_field: Optional[Union[None, ndarray]] = None,
+         scalar_start: Optional[Union[None, float]] = None, scalar_end: Optional[Union[None, float]] = None,
+         scalar_cmap: Optional[Any] = None, vector_field: Optional[Union[None, ndarray]] = None,
+         vector_color: Optional[Union[None, ndarray]] = None, custom_array: Optional[Union[None, ndarray]] = None,
+         custom_3darray: Optional[Union[None, ndarray]] = None):
+    return to_pyiron(self).plot3d(show_cell=show_cell, show_axes=show_axes, camera=camera, spacefill=spacefill,
+                                       particle_size=particle_size, select_atoms=select_atoms, background=background,
+                                       color_scheme=color_scheme, colors=colors, scalar_field=scalar_field,
+                                       scalar_start=scalar_start, scalar_end=scalar_end, scalar_cmap=scalar_cmap,
+                                       vector_color=vector_color, vector_field=vector_field,
+                                       custom_3darray=custom_3darray, custom_array=custom_array)
+
+@_hidden_add_method(IronAtoms, view.__doc__)
+def view(self, show_cell: Optional[bool] = True,
+         show_axes: Optional[bool] = True, camera: Optional[str] = 'orthographic', spacefill: Optional[bool] = True,
+         particle_size: Optional[float] = 1.0, select_atoms: Optional[Union[None, ndarray]] = None,
+         background: Optional[str] = 'white', color_scheme: Optional[Union[None, str]] = None,
+         colors: Optional[Union[None, ndarray]] = None, scalar_field: Optional[Union[None, ndarray]] = None,
+         scalar_start: Optional[Union[None, float]] = None, scalar_end: Optional[Union[None, float]] = None,
+         scalar_cmap: Optional[Any] = None, vector_field: Optional[Union[None, ndarray]] = None,
+         vector_color: Optional[Union[None, ndarray]] = None, custom_array: Optional[Union[None, ndarray]] = None,
+         custom_3darray: Optional[Union[None, ndarray]] = None):
+    return to_pyiron(self).plot3d(show_cell=show_cell, show_axes=show_axes, camera=camera, spacefill=spacefill,
+                                       particle_size=particle_size, select_atoms=select_atoms, background=background,
+                                       color_scheme=color_scheme, colors=colors, scalar_field=scalar_field,
+                                       scalar_start=scalar_start, scalar_end=scalar_end, scalar_cmap=scalar_cmap,
+                                       vector_color=vector_color, vector_field=vector_field,
+                                       custom_3darray=custom_3darray, custom_array=custom_array)

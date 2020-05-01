@@ -7,9 +7,7 @@ from os.path import join, exists
 from shutil import rmtree
 
 
-from typing import List
-
-def remove_white(string):
+def remove_white(string: str) -> str:
     """
     Removes all whitespaces in a given string
     :param string: (str) the string

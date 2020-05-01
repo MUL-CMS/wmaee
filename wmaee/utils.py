@@ -1,7 +1,7 @@
 from pymatgen.io.ase import AseAtomsAdaptor
 from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, \
     pyiron_to_pymatgen, pymatgen_to_pyiron, Atoms as IronAtoms
-from typing import Any, Collection
+from typing import Any, Collection, Optional, Union
 from pymatgen import Structure
 from ase import Atoms as AseAtoms
 from typing import Union, Callable
@@ -84,13 +84,15 @@ def unpack_single(a):
     return a[0] if len(a) == 1 else a
 
 
-def add_method(cls: type) -> Callable:
+def add_method(cls: type, doc: Optional[Union[None, str]]) -> Callable:
 
     def decorator(func: Callable) -> Callable:
 
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            return func(*args, **kwargs)
+            return func(self, *args, **kwargs)
+        if doc:
+            wrapper.__doc__ = doc
         setattr(cls, func.__name__, wrapper)
         # Note we are not binding func, but wrapper which accepts self but does exactly the same as func
         return func # returning func means func can still be used normally
