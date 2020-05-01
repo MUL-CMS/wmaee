@@ -385,3 +385,14 @@ class LAMMPSCalculation(LoggerMixin):
         :return: (tuple(int, Lattice)) the last step number and corresponding lattice
         """
         return self._pyiron_job['output/generic/time'][-1], Lattice(self._pyiron_job['output/generic/cell'][-1])
+
+    def animate(self, spacefill: Optional[bool]=True, show_cell: Optional[bool]=True, stride: Optional[int]=1, center_of_mass: Optional[bool]=False, particle_size: Optional[float]=0.5):
+        """
+        Animates the job if a trajectory is present
+        :param spacefill: (bool)
+        :param show_cell: (bool)
+        :param stride: (int) show animation every stride [::stride] use value >1 to make animation faster [default=1]
+        :param center_of_mass: (bool)
+        :return animation: nglview IPython widget
+        """
+        return self._pyiron_job.animate(spacefill=spacefill, show_cell=show_cell, stride=stride,center_of_mass=center_of_mass, particle_size=particle_size)
