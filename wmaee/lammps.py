@@ -15,14 +15,14 @@ class PotentialException(Exception):
     pass
 
 
-class LAMMPSInput(LoggerMixin):
+class LAMMPSCalculation(LoggerMixin):
     """
     A class used for creating LAMMPS jobs, and is built around pyiron
     """
 
     def __init__(self, structure: Union[Structure, AseAtoms, IronAtoms], potential: Union[str, None] = None,
                  name: Optional[Union[str, None]] = None, directory: Optional[Union[str, None]] = None):
-        super(LAMMPSInput, self).__init__()
+        super(LAMMPSCalculation, self).__init__()
         self._structure = structure
 
         if directory is None:
@@ -133,7 +133,12 @@ class LAMMPSInput(LoggerMixin):
         :param delta_temp: (float) Thermostat timescale, but in your Lammps time units, whatever those are. (DEPRECATED.)
         :param delta_press: (float) Barostat timescale, but in your Lammps time units, whatever those are. (DEPRECATED.)
         """
-        pass
+        self._pyiron_job.calc_md(temperature=temperature, pressure=pressure, n_ionic_steps=n_ionic_steps,
+                                 time_step=time_step, n_print=n_print,
+                                 temperature_damping_timescale=temperature_damping_timescale,
+                                 pressure_damping_timescale=pressure_damping_timescale, seed=seed, tloop=tloop,
+                                 initial_temperature=initial_temperature, langevin=langevin, delta_temp=delta_temp,
+                                 delta_press=delta_press)
 
     def minimize(self, e_tol: Optional[float] = 0.0, f_tol: Optional[float] = 1e-4, max_iter: Optional[int] = 100000,
                  pressure: Optional[Union[Collection, float]] = None, n_print: Optional[int] = 100,
@@ -146,7 +151,8 @@ class LAMMPSInput(LoggerMixin):
         :param n_print: (int) Write (dump or print) to the output file every n steps (Default: 100)
         :param style: ('cg'/'sd'/other values from Lammps docs) The style of the numeric minimization, either conjugate gradient, steepest descent, or other keys permissible from the Lammps docs on 'min_style'. (Default is 'cg' -- conjugate gradient.)
         """
-        pass
+        self._pyiron_job.calc_minimize(e_tol=e_tol, f_tol=f_tol, max_iter=max_iter, pressure=pressure, n_print=n_print,
+                                       style=style)
 
     def vcsgc(self, mu: Dict, ordered_element_list: List, target_concentration: Optional[Union[Dict, None]] = None,
               kappa: Optional[int] = 1000., mc_step_interval: Optional[int] = 100, swap_fraction: Optional[float] = 0.1,

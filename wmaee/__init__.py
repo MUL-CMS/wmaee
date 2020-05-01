@@ -13,7 +13,7 @@ from wmaee.utils import ase_to_pymatgen, pymatgen_to_ase
 from wmaee.vasp import VASPInput, VASPOutput, parse_output, write_input, full_run, vasp
 
 # LAMMPS related stuff based on pyiron
-from wmaee.lammps import LAMMPSInput
+from wmaee.lammps import LAMMPSCalculation
 # import the shell
 from wmaee.core.runner import Shell
 
