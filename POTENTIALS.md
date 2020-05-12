@@ -1,7 +1,7 @@
 # Potentials in the `wmaee` module
 
 The following potentials are available. Currently there are *MEAM*, *EAM* and *Finnis-Sinclair* potentials.
-The potentials are packed in the archive [`lammps_potentials_pyiron.tar.gz`](lammps_potentials_pyiron.tar.gz).
+The potentials are packed in the archive [`lammps_potentials_pyiron.tar.gz`](https://oc.unileoben.ac.at/index.php/s/nJWn6ldBVPxRln6).
 
 
 |  Finnis-Sinclair | EAM | MEAM |
