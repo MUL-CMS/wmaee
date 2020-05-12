@@ -1,8 +1,10 @@
 import logging
-from wmaee.core.common import working_directory, LoggerMixin
-from wmaee.utils import ase_to_pymatgen
+import sys
+from wmaee.core.common import Shell, LoggerMixin, OutputEmitter
+from wmaee.utils import ase_to_pymatgen, to_pymatgen
 from wmaee.potentials import construct_potcar
-from wmaee.core.runner import vasp
+from wmaee.core.runner import vasp, get_vasp_configuration
+from wmaee.core.types import *
 from pymatgen.io.vasp import Poscar, Potcar, Kpoints, Incar, Vasprun
 from pymatgen import Structure
 from ase import Atoms
@@ -10,7 +12,11 @@ from uuid import uuid4
 from os import getcwd
 from os.path import exists
 
-def _write_input(structure, incar, kpoints=None, potcar=None, directory=None, xc_func='gga', delete=False):
+
+def _write_input(structure: Union[Atoms, Collection[Atoms], Callable, Poscar], incar: Union[str, Incar],
+                 kpoints: Optional[Union[None, str, Kpoints]] = None, potcar: Optional[Union[None, str, Potcar]] = None,
+                 directory: Optional[Union[None, Directory]] = None, xc_func: Optional[str] = 'gga',
+                 delete: Optional[bool] = False):
     """
     Writes input files for a VASP calculations
     :param structure: (ase.Atoms or pymatgen.Structure or str or pymatgen.io.vasp.Poscar) the structure to use in the calculation
@@ -41,8 +47,17 @@ def _write_input(structure, incar, kpoints=None, potcar=None, directory=None, xc
             structure = Poscar(structure.get_sorted_structure())
         elif isinstance(structure, str):
             structure = Poscar.from_file(structure)
+        elif isinstance(structure, Collection):
+            logging.getLogger('wmaee.vasp._write_input').warning(
+                'A list of structures was passed. I\'ll take the first one!')
+            structure = next(iter(structure))
+        elif isinstance(structure, Callable):
+            logging.getLogger('wmaee.vasp._write_input').warning(
+                'A list of structures was passed. I\'ll take the first one!')
+            structure = structure(0)
         else:
-            raise ValueError()
+            raise TypeError(type(structure))
+
         poscar = structure
 
         incar = Incar(incar) if isinstance(incar, dict) else incar
@@ -75,7 +90,9 @@ class VASPInput(LoggerMixin):
     A class to represent and write the input data needed by VASP.
     """
 
-    def __init__(self, incar, structure, kpoints, potcar=None, xc_func='gga'):
+    def __init__(self, structure: Union[Atoms, Collection[Atoms]], incar: Union[str, Incar],
+                 kpoints: Optional[Union[None, str, Kpoints]] = None, potcar: Optional[Union[None, str, Potcar]] = None,
+                 xc_func: Optional[str] = 'gga'):
         """
         :param incar: (pymatgen.io.vasp.Incar or dict or str) the incar file
         :param structure: (ase.Atoms or pymatgen.Structure or str or pymatgen.io.vasp.Poscar) the structure to use in the calculation
@@ -131,7 +148,7 @@ class VASPInput(LoggerMixin):
     def structure(self, value):
         self._structure = value
 
-    def write(self, directory=None):
+    def write(self, directory: Optional[Union[Directory, None]] = None):
         """
         Writes the input data to a certain directory
         :param directory: (str or working_directory) the directory where the input files are written to (default: None)
@@ -141,7 +158,7 @@ class VASPInput(LoggerMixin):
                      directory=directory)
 
     @staticmethod
-    def from_directory(directory=None):
+    def from_directory(directory: Optional[Union[Directory, None]] = None):
         """
         Parses the input data from a given directory. Useful to use a previous calculations
         :param directory: (str or working_directory) the directory where the input files are located (default: None)
@@ -156,14 +173,14 @@ class VASPInput(LoggerMixin):
                 if not exists(f):
                     raise FileNotFoundError('Could not find VASP input file "{}"'.format(f))
             return VASPInput(
-                Incar.from_file('INCAR'),
-                Poscar.from_file('POSCAR').structure,
-                Kpoints.from_file('KPOINTS'),
-                Potcar.from_file('POTCAR')
+                incar=Incar.from_file('INCAR'),
+                structure=Poscar.from_file('POSCAR').structure,
+                kpoints=Kpoints.from_file('KPOINTS'),
+                potcar=Potcar.from_file('POTCAR')
             )
 
 
-def write_input(inp, directory=None):
+def write_input(inp, directory: Optional[Union[Directory, None]] = None):
     """
     Write a VASP input to a directory. Is equivalent to `inp.write(directory)`
     :param inp: (VASPInput) the VASPInput object
@@ -177,7 +194,7 @@ class VASPOutput(LoggerMixin):
     __create_key = str(uuid4())
 
     @classmethod
-    def create(cls, vasprun):
+    def create(cls, vasprun: Vasprun):
         """
         Creates a instance of an VASPOutput object
         :param vasprun: (pymatgen.io.vasp.Vasprun) the parsed XML data of the run
@@ -187,7 +204,13 @@ class VASPOutput(LoggerMixin):
             raise TypeError(type(vasprun))
         return VASPOutput(cls.__create_key, vasprun)
 
-    def __init__(self, create_key, vasprun):
+    def __init__(self, create_key: str, vasprun: Vasprun):
+        """
+        Internal method to create VASPOutput instances
+
+        :param create_key: (str) the magic key of the class
+        :param vasprun: (pymatgen.io.vasp.Vasprun) the parsed XML data
+        """
         super(VASPOutput, self).__init__()
         assert (create_key == VASPOutput.__create_key), \
             "VASPOutput objects must be created using VASPOutput.create"
@@ -279,7 +302,7 @@ class VASPOutput(LoggerMixin):
         return parse_output(directory=directory)
 
 
-def parse_output(directory=None):
+def parse_output(directory: Optional[Union[Directory, None]] = None):
     """
     Parses the output from VASP. Searches for 'vasprun.xml' file
     :param directory: (str or working_directory) the directory where the output files are located (default: None)
@@ -300,10 +323,156 @@ def parse_output(directory=None):
         return VASPOutput.create(vasprun)
 
 
-def full_run(inp, directory=None, cpus=2, show_output=True):
-    write_input(inp, directory=directory)
-    result = vasp(directory=directory, cpus=cpus, show_output=show_output)
+def full_run(inp: VASPInput, directory: Optional[Union[Directory, None]] = None, cpus: Optional[int] = 2,
+             show_output: Optional[bool] = True, application: Optional[Union[str, None]] = None,
+             hostname: Optional[Union[str, None]] = None, partition: Optional[Union[str, None]] = None):
+    """
+    Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
+    will be executed on os.getcwd() directory
+    :param inp: (VASPInput) the VASP input
+    :param directory: (str or working_directory) the directory where to execute vasp
+    :param cpus: (int) the number of core used to run the VASP subprocess (default: 2)
+    :param show_output: (bool) wether to print the output on sys.stdout, passed on to _read_output (default: True)
+    :param return_stdout: (bool) wether to return the output as a list of strings. Passed on to _send_command (default: False)
+    :param application: (str) the string of the application name (default: None)
+    :param hostname: (str) the string of the current hostname (default: None)
+    :param partition: (str) the partition name as a string (default: None)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
+    if isinstance(inp.structure, (Callable, list, tuple)):
+        result = _vasp_interactive_internal(inp, directory=directory, cpus=cpus, show_output=show_output,
+                                            application=application,
+                                            hostname=hostname, partition=partition)
+        result = result == 0
+    else:
+        write_input(inp, directory=directory)
+        result = vasp(directory=directory, cpus=cpus, show_output=show_output, application=application,
+                      hostname=hostname, partition=partition)
     if result:
         return parse_output(directory=directory)
     else:
         raise RuntimeError('VASP crashed')
+
+
+def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directory, None]] = None,
+                               cpus: Optional[int] = 2, show_output: Optional[bool] = True,
+                               return_stdout: Optional[bool] = False,
+                               application: Optional[Union[str, None]] = None,
+                               hostname: Optional[Union[str, None]] = None,
+                               partition: Optional[Union[str, None]] = None):
+    """
+    Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
+    will be executed on os.getcwd() directory
+    :param inp: (VASPInput) the VASP input
+    :param directory: (str or working_directory) the directory where to execute vasp
+    :param cpus: (int) the number of core used to run the VASP subprocess (default: 2)
+    :param show_output: (bool) wether to print the output on sys.stdout, passed on to _read_output (default: True)
+    :param return_stdout: (bool) wether to return the output as a list of strings. Passed on to _send_command (default: False)
+    :param application: (str) the string of the application name (default: None)
+    :param hostname: (str) the string of the current hostname (default: None)
+    :param partition: (str) the partition name as a string (default: None)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
+    logger = logging.getLogger('wmaee.core.vasp.VASPRunner')
+
+    if directory is None:
+        directory = working_directory(getcwd())
+
+    if isinstance(directory, working_directory):
+        pass
+    elif isinstance(directory, str):
+        directory = working_directory(directory)
+
+    if isinstance(inp.structure, (list, tuple)):
+        # it is not a collection thus therefore we do not have to do anything
+        def mkgen():
+            length = len(inp.structure)
+            index = [0]
+            iterator = iter(inp.structure)
+
+            def gen_():
+                is_last = index[0] + 1 == length
+                index[0] += 1
+                return is_last, next(iterator)
+
+            return gen_
+
+        generator = mkgen()
+    elif isinstance(inp.structure, Callable):
+        generator = inp.structure
+    else:
+        raise TypeError('For VASP Interactive "%s" is not allowed.' % type(inp.structure).__name__)
+    stopcar = Incar(dict(LSTOP=True))
+    # Check in INTERACTIVE = .True. in INCAR file
+    if 'INTERACTIVE' not in inp.incar or not inp.incar['INTERACTIVE']:
+        inp.incar['INTERACTIVE'] = True
+
+    with directory:
+        preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname,
+                                                           partition=partition)
+        command = command.format(cores=cpus, binary=binary)
+        change_command = 'cd {}'.format(getcwd())
+
+        is_last, current_structure = generator()
+
+        if is_last:
+            inp.incar['INTERACTIVE'] = False
+            inp.incar['NSW'] = 0
+            # Then we have to remove the interactive tag
+        _write_input(structure=current_structure, incar=inp.incar, potcar=inp.potcar, kpoints=inp.kpoints,
+                     xc_func=inp.xc_func)
+
+        with Shell(stdout=sys.stdout if show_output else None, stderr=sys.stderr) as shell:
+            shell.run(change_command)
+            shell.run(preamble)
+            position_callback = OutputEmitter('POSITIONS: reading from stdin')
+
+            def set_new_positions():
+                is_last, next_structure = generator()
+                next_structure = to_pymatgen(next_structure)
+                for fx, fy, fz in next_structure.frac_coords:
+                    input_line = '%.7f %.7f %.7f\n' % (fx, fy, fz)
+                    shell._send_command(input_line, raw=True)
+                if is_last:
+                    stopcar.write_file('STOPCAR')
+                    shell._send_command('exit\n', raw=True)
+                    # Disable also this handle
+                    position_callback.trigger -= set_new_positions
+
+            # only register the handle if more than one structure is in our list
+            position_callback.trigger += set_new_positions
+            output = shell.run(command, return_out=return_stdout, return_exit=True, output=[position_callback])
+
+        if return_stdout:
+            _, exitcode, output = output
+        else:
+            _, exitcode = output
+
+        if exitcode != 0:
+            logger.warning('VASP did not execute successfully! Exit-Code: "{}"'.format(exitcode))
+
+        return exitcode if not return_stdout else (exitcode, output)
+
+
+def vasp_interactive(inp: VASPInput, directory: Optional[Union[Directory, None]] = None,
+                     cpus: Optional[int] = 2, show_output: Optional[bool] = True,
+                     return_stdout: Optional[bool] = False,
+                     application: Optional[Union[str, None]] = None,
+                     hostname: Optional[Union[str, None]] = None,
+                     partition: Optional[Union[str, None]] = None):
+    """
+    Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
+    will be executed on os.getcwd() directory
+    :param inp: (VASPInput) the VASP input
+    :param directory: (str or working_directory) the directory where to execute vasp
+    :param cpus: (int) the number of core used to run the VASP subprocess (default: 2)
+    :param show_output: (bool) wether to print the output on sys.stdout, passed on to _read_output (default: True)
+    :param return_stdout: (bool) wether to return the output as a list of strings. Passed on to _send_command (default: False)
+    :param application: (str) the string of the application name (default: None)
+    :param hostname: (str) the string of the current hostname (default: None)
+    :param partition: (str) the partition name as a string (default: None)
+    :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
+    """
+    return _vasp_interactive_internal(inp, directory=directory, cpus=cpus, show_output=show_output,
+                                      return_stdout=return_stdout, application=application, hostname=hostname,
+                                      partition=partition)

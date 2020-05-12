@@ -1,8 +1,8 @@
 from wmaee.core.common import LoggerMixin
 from wmaee.utils import to_pyiron
-from typing import Union, Optional, Dict, Collection, NoReturn, List, Iterator, Tuple
+from wmaee.core.types import *
 from ase import Atoms as AseAtoms
-from pyiron.atomistics.structure.atoms import Atoms as IronAtoms
+
 from pyiron.base.settings.generic import Settings
 from pyiron.project import Project
 from pymatgen import Structure, Lattice
@@ -22,7 +22,7 @@ class LAMMPSCalculation(LoggerMixin):
     A class used for creating LAMMPS jobs, and is built around pyiron
     """
 
-    def __init__(self, structure: Union[Structure, AseAtoms, IronAtoms], potential: Union[str, None] = None,
+    def __init__(self, structure: Atoms, potential: Union[str, None] = None,
                  name: Optional[Union[str, None]] = None, directory: Optional[Union[str, None]] = None):
         super(LAMMPSCalculation, self).__init__()
         self._structure = structure
@@ -47,7 +47,8 @@ class LAMMPSCalculation(LoggerMixin):
         self._project_handle = Project(self._directory)
         self._pyiron_job = self._project_handle.create_job(self._project_handle.job_type.Lammps, self._name)
         self._pyiron_job.structure = to_pyiron(self._structure)
-        self._pyiron_job.potential = self._potential
+        if self._potential is not None:
+            self._pyiron_job.potential = self._potential
 
     def _modify_pyiron_config(self):
         """
@@ -58,11 +59,11 @@ class LAMMPSCalculation(LoggerMixin):
             self._pyiron_settings_reference._configuration['project_paths'].append(pwd)
 
     @property
-    def structure(self) -> Union[Structure, AseAtoms, IronAtoms]:
+    def structure(self) -> Atoms:
         return self._structure
 
     @structure.setter
-    def structure(self, other: Union[Structure, AseAtoms, IronAtoms]) -> NoReturn:
+    def structure(self, other: Atoms) -> NoReturn:
         if not self.is_valid_potential(other, self._potential):
             self.logger.warning(
                 'The potential "%s" is not valid for this structure. Consider to set a new potential' % self._potential)
@@ -395,4 +396,20 @@ class LAMMPSCalculation(LoggerMixin):
         :param center_of_mass: (bool)
         :return animation: nglview IPython widget
         """
-        return self._pyiron_job.animate(spacefill=spacefill, show_cell=show_cell, stride=stride,center_of_mass=center_of_mass, particle_size=particle_size)
+        return self._pyiron_job.animate_structure(spacefill=spacefill, show_cell=show_cell, stride=stride,center_of_mass=center_of_mass, particle_size=particle_size)
+
+    def __getattr__(self, item):
+        try:
+            return getattr(self._pyiron_job, item)
+        except AttributeError:
+            raise
+
+    def __getitem__(self, item):
+        try:
+            return self._pyiron_job[item]
+        except Exception:
+            raise KeyError
+
+    def reset(self):
+        self._project_handle.remove_job(self._name)
+        self.__init__(self._structure, potential=self._potential, name=self._name, directory=self._directory)
