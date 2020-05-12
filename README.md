@@ -22,7 +22,7 @@ in your command line. This will create a new directory with the name **wmaee** i
   1. **Permanently**: Add `export PYTHONPATH=/home/dominik/.local/python/wmaee:${PYTHONPATH}` to your `.bashrc` file (This is my example configuration)
   2. Set the environment variable manually whenever you want to use the module
 
-## Make VASP run on your computer with the `wmaee` module
+### Make VASP run on your computer with the `wmaee` module
 In order to make convenience functions (e.g automatic generation of POTCAR files) work a few steps have to be followed, and a litle bit of configuring is neccessary.
 
 1. Create a configuration directory (e. g `.config` - I have name it so, but you can as you want ) and remember its **absolute** path.
@@ -107,12 +107,49 @@ export WMAEE_HOSTNAME=local
 export WMAEE_PARTITION=default
 ```
 
-## Make LAMMPS run on your computer with the `wmaee` module
+### Make LAMMPS run on your computer with the `wmaee` module
 **NOTE:** This will only work in an **Anaconda** environment, since the LAMMPS part is built around `pyiron` which is available on `conda-forge` only (or at least the most important packages it needs to run nicely)
 
-### prerequisites
+### `pyiron` module
 As said `pyiron` is required to run LAMMPS a few packages are needed. You can run
 ```bash
 conda install -c conda-forge pyiron lammps ovito nglview sqsgenerator
 ```
+otherwise it will be hard to install the other packages. The `pyiron` developers currently only guarantee the full functionality only within an **Anaconda** environment. Please stick to that. It is possible to do it also without that but it is a very tedious task and won't be subject of this guide here.
+<br />
+If  you need more detailed help regarding `pyrion` have a look at the 
+[`pyiron` docs](https://pyiron.github.io/source/installation.html).
+**NOTE:** `pyiron` does most of the configuring work on its own, however before proceed with the next steps give it the chance to congifure it. 
+Make sure that you import it once in a Python shell, which then should look something like this
+```bash
+> python
+>>> import pyiron
+It appears that pyiron is not yet configured, do you want to create a default start configuration (recommended: yes). [yes/no]
+>>> yes
+>>> exit()
+> cat ~/.pyiron
+[DEFAULT]
+PROJECT_PATHS = ~/pyiron/projects
+RESOURCE_PATHS = ~/pyiron/resources
+```
+
+#### `nglview` plugin needs to be enabled
+One of the most important and most often used features is to view the structures in the browser, therefore one has to enable the `nglview` Juypter-plugin. You can do this by running the following commands. 
+```bash
+jupyter nbextension install nglview --py --sys-prefix
+jupyter nbextension enable nglview --py --sys-prefix
+```
+#### Installing the potentials
+
+In order to run MD simulations one has to install the potentials and make them available to the underlying `pyiron` module.
+Therefore I do have created an extensive archive of [potentials](POTENTIALS.md).
+
+1. Obtain the potential archive [`lammps_potentials_pyiron.tar.gz`](https://oc.unileoben.ac.at/index.php/s/nJWn6ldBVPxRln6)
+    * The password the same as the WiFi key of the network of David's office router :P
+    * If you do not know it, please ask David
+2. Before you extract it, please inspect it 
+3. By default `pyiron` creates its directories in your `${HOME}` folder, thus your all you have to do is to unpack in your home folder:
+   `mv lammps_potentials_pyiron.tar.gz ~ && cd && tar xzvf lammps_potentials_pyiron.tar.gz`
+
+
 
