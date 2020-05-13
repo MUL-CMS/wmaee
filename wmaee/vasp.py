@@ -1,6 +1,6 @@
 import logging
 import sys
-from wmaee.core.common import Shell, LoggerMixin, OutputEmitter
+from wmaee.core.common import Shell, LoggerMixin, OutputEmitter, EventHandler
 from wmaee.utils import ase_to_pymatgen, to_pymatgen
 from wmaee.potentials import construct_potcar
 from wmaee.core.runner import vasp, get_vasp_configuration
@@ -359,7 +359,9 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
                                return_stdout: Optional[bool] = False,
                                application: Optional[Union[str, None]] = None,
                                hostname: Optional[Union[str, None]] = None,
-                               partition: Optional[Union[str, None]] = None):
+                               partition: Optional[Union[str, None]] = None,
+                               callbacks: Optional[Collection[Callable]] = None,
+                               output: Optional[Union[Collection[TextIO]]]=None):
     """
     Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
     will be executed on os.getcwd() directory
@@ -371,6 +373,8 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
     :param application: (str) the string of the application name (default: None)
     :param hostname: (str) the string of the current hostname (default: None)
     :param partition: (str) the partition name as a string (default: None)
+    :param callbacks: (list of callable) callback methods after each ionic step (default: None)
+    :param output: (list of TextIO) list of streams where stdout will be forked to (default: None)
     :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
     """
     logger = logging.getLogger('wmaee.core.vasp.VASPRunner')
@@ -426,6 +430,11 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
             shell.run(change_command)
             shell.run(preamble)
             position_callback = OutputEmitter('POSITIONS: reading from stdin')
+            # create event handlers
+            if callbacks is not None:
+                handlers = [EventHandler('ionic_step_callback_handler_%i' % i, cb) for i, cb in enumerate(callbacks)]
+                for handler in handlers:
+                    position_callback.trigger.add_event_handler(handler)
 
             def set_new_positions():
                 is_last, next_structure = generator()
@@ -441,8 +450,11 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
 
             # only register the handle if more than one structure is in our list
             position_callback.trigger += set_new_positions
-            output = shell.run(command, return_out=return_stdout, return_exit=True, output=[position_callback])
-
+            output_streams = [position_callback] if output is None else [position_callback] + list(output)
+            output = shell.run(command, return_out=return_stdout, return_exit=True, output=output_streams)
+            if callbacks is not None:
+                for handler in handlers:
+                    position_callback.trigger.remove_event_handler(handler)
         if return_stdout:
             _, exitcode, output = output
         else:
@@ -459,7 +471,9 @@ def vasp_interactive(inp: VASPInput, directory: Optional[Union[Directory, None]]
                      return_stdout: Optional[bool] = False,
                      application: Optional[Union[str, None]] = None,
                      hostname: Optional[Union[str, None]] = None,
-                     partition: Optional[Union[str, None]] = None):
+                     partition: Optional[Union[str, None]] = None,
+                     callbacks: Optional[Collection[Callable]] = None,
+                     output: Optional[Union[Collection[TextIO]]]=None):
     """
     Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
     will be executed on os.getcwd() directory
@@ -471,8 +485,10 @@ def vasp_interactive(inp: VASPInput, directory: Optional[Union[Directory, None]]
     :param application: (str) the string of the application name (default: None)
     :param hostname: (str) the string of the current hostname (default: None)
     :param partition: (str) the partition name as a string (default: None)
+    :param callbacks: (list of callable) callback methods after each ionic step (default: None)
+    :param output: (list of TextIO) list of streams where stdout will be forked to (default: None)
     :return: (bool) or (bool, list of str) exitcode== 0 and output depending on the setting of propagate_stdout
     """
     return _vasp_interactive_internal(inp, directory=directory, cpus=cpus, show_output=show_output,
                                       return_stdout=return_stdout, application=application, hostname=hostname,
-                                      partition=partition)
+                                      partition=partition, callbacks=callbacks, output=output)

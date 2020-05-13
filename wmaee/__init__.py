@@ -9,7 +9,7 @@ from wmaee.utils import ase_to_pymatgen, pymatgen_to_ase, pyiron_to_pymatgen, py
 #utility functions
 from wmaee.vis import view
 # VASP related stuff
-from wmaee.vasp import VASPInput, VASPOutput, parse_output, write_input, full_run, vasp
+from wmaee.vasp import VASPInput, VASPOutput, parse_output, write_input, full_run, vasp, vasp_interactive
 
 # LAMMPS related stuff based on pyiron
 from wmaee.lammps import LAMMPSCalculation
