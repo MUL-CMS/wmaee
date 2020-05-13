@@ -24,3 +24,6 @@ def sample_pair_axes(start: float, cut: float, mu: float, num: Optional[int] = 5
 def pairs(start: float, cut: float, mu: float, species: Union[Collection[str], Tuple[str]], num: Optional[int] = 50,
           pot: Tuple[float, float] = (5, 1), vacuum: Optional[float] = 20) -> Iterable[Atoms]:
     samples = sample_pair_axes(start, cut, mu, num=num, pot=pot)
+
+    coords = None
+    return samples
