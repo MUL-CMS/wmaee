@@ -1,7 +1,7 @@
 import numpy as np
 from wmaee.extensions.unsupported.triplets.sampling import sampling_function, ArrayLike
 from wmaee.core.types import Atoms, Collection, Union, Optional, Tuple, Iterable
-
+from ase import Atoms as AseAtoms
 
 def sample_pair_axes(start: float, cut: float, mu: float, num: Optional[int] = 50,
                      pot: Tuple[float, float] = (5, 1)) -> ArrayLike:
@@ -25,5 +25,10 @@ def pairs(start: float, cut: float, mu: float, species: Union[Collection[str], T
           pot: Tuple[float, float] = (5, 1), vacuum: Optional[float] = 20) -> Iterable[Atoms]:
     samples = sample_pair_axes(start, cut, mu, num=num, pot=pot)
 
-    coords = None
+    atom1 = np.zeros((len(samples),3))
+    atom2 = np.zeros_like(atom1)
+    atom2[:, 0] = samples
+    cell = np.array([[np.amax(atom2), 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0 ,0.0]]) + vacuum * np.eye(3)
+    for coord1, coord2 in zip(atom1, atom2):
+        yield AseAtoms(cell=cell, symbols=species, positions=[coord1, coord2])
     return samples
