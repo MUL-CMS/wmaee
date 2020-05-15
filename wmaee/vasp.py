@@ -439,9 +439,9 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
             def set_new_positions():
                 is_last, next_structure = generator()
                 next_structure = to_pymatgen(next_structure)
-                for fx, fy, fz in next_structure.frac_coords:
-                    input_line = '%.7f %.7f %.7f\n' % (fx, fy, fz)
-                    shell._send_command(input_line, raw=True)
+                for atom in next_structure.frac_coords:
+                    text = " ".join(map("{:19.16f}".format, atom))
+                    shell._send_command(text+'\n', raw=True)
                 if is_last:
                     stopcar.write_file('STOPCAR')
                     shell._send_command('exit\n', raw=True)
