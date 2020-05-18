@@ -63,7 +63,6 @@ def sample_triangle(start: float, cut: float, mu: float, num: Optional[int] = 50
 
     # we have to calculate the minimal angles needed to keep the minimum distance
     min_angles = 2 * np.arcsin(start / (2 * np.array(samples)))
-    print(min_angles)
     max_angles = np.zeros_like(min_angles) + np.pi
     coords = []
     num_samples = 0
