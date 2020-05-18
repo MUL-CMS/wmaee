@@ -82,7 +82,6 @@ def sample_triangle(start: float, cut: float, mu: float, num: Optional[int] = 50
                 si = sampling_function(dists, mu, num, pot, indices=True)
                 fine_axis = np.linspace(min_angle, max_angle, num=np.amax(si) + 1)
                 ang_samples = [fine_axis[fis] for fis in si]
-                print(ksample, rsample, min_angle, np.amin(ang_samples))
                 for ang in (ang_samples if num_samples % 2 == 0 else reversed(ang_samples)):
                     coords.append((rsample, ksample, ang))
                 num_samples += 1
