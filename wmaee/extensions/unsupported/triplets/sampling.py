@@ -63,6 +63,7 @@ def sample_triangle(start: float, cut: float, mu: float, num: Optional[int] = 50
 
     # we have to calculate the minimal angles needed to keep the minimum distance
     min_angles = 2 * np.arcsin(start / (2 * np.array(samples)))
+    print(min_angles)
     max_angles = np.zeros_like(min_angles) + np.pi
     coords = []
     num_samples = 0
@@ -72,13 +73,17 @@ def sample_triangle(start: float, cut: float, mu: float, num: Optional[int] = 50
         for ksample in samples:
             third = np.array([ksample * np.cos(angles), ksample * np.sin(angles), np.zeros_like(angles)])
             dists = np.linalg.norm(third - second, axis=0)
+
             if np.amax(dists) < mu:
+
                 for ang in np.linspace(min_angle, max_angle, num=num):
                     coords.append((rsample, ksample, ang))
             else:
+
                 si = sampling_function(dists, mu, num, pot, indices=True)
                 fine_axis = np.linspace(min_angle, max_angle, num=np.amax(si) + 1)
                 ang_samples = [fine_axis[fis] for fis in si]
+                print(ksample, rsample, min_angle, np.amin(ang_samples))
                 for ang in (ang_samples if num_samples % 2 == 0 else reversed(ang_samples)):
                     coords.append((rsample, ksample, ang))
                 num_samples += 1
