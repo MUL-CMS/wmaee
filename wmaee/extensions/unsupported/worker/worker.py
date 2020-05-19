@@ -31,8 +31,8 @@ class LockedTinyDB(TinyDB):
         return result
 
 
-def database(fname=None):
-    return LockedTinyDB(DATABASE_FILE_NAME if fname is None else fname)
+def database(fname):
+    return LockedTinyDB(fname)
 
 
 Calculations = Query()
