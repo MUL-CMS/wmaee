@@ -14,6 +14,8 @@ from sqlalchemy import Column, String, Integer, DateTime, create_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 from datetime import datetime
+from collections import namedtuple
+from time import sleep
 logger = logging.getLogger(__file__)
 # One day of timeout limit
 LOCK_TIMEOUT = (24*2600)
@@ -160,7 +162,6 @@ class CalculationWorker(Thread):
         calculation_id, folder, _ = calculation
         print('Running calculation directory "%s"' % join(self._directory, folder))
         try:
-
             with working_directory(directory):
                 if exists('call.json'):
                     with open('call.json', 'r') as h:
@@ -182,15 +183,97 @@ class CalculationWorker(Thread):
             calc.finished = datetime.now()
         return success
 
+
+
+
+class SimpleCalculationWorker(Thread):
+
+    def __init__(self, directory, dbfname=None, prefix=None, *args, **kwargs):
+        super(SimpleCalculationWorker, self).__init__(*args, **kwargs)
+        self.prefix, self.name = dirname(directory), basename(directory)
+        if not self.prefix:
+            self.prefix = getcwd()
+        if prefix is None:
+            self.folder_prefix = '%s-*' % self.name
+        else:
+            self.folder_prefix = prefix
+        if dbfname is None:
+            self._dbfname = '%s.db' % self.name
+        else:
+            self._dbfname = dbfname
+        self._directory = directory
+        self._done = []
+        self._remaining = []
+        self._crashed = []
+        self._lock_file_name = None
+        self._calc_meta = namedtuple('CalculationTuple', ['calculation_id', 'folder', 'status'])
+
+    def _get_status(self, pth):
+        xml_path = join(pth, 'vasprun.xml')
+        if exists(xml_path):
+            try:
+                with working_directory(pth):
+                    parse_output()
+            except Exception:
+                status = Status.Crashed.value
+            else:
+                status = Status.Finished.value
+        else:
+            status = Status.Queue.value
+        return status
+
+    def initialize(self):
+        with working_directory(self._directory):
+            # Now the database does not yet exist we have to create the datatable
+            folder_prefix = self.folder_prefix
+            calcs = glob(folder_prefix)
+            if len(calcs) > 0:
+                for c_id, fd in tqdm(enumerate(calcs), total=len(calcs)):
+                    status = self._get_status(fd)
+                    calc = self._calc_meta(calculation_id=c_id, folder=fd, status=status)
+                    if status == Status.Queue.value:
+                        self._remaining.append(calc)
+                    elif status == Status.Finished.value:
+                        self._done.append(calc)
+                    elif status == Status.Crashed.value:
+                        self._crashed.append(calc)
+
+    def _update_info_remaining(self):
+        with working_directory(self._directory):
+            for r in self._remaining:
+                r.status = self._get_status(r.folder)
+            finished = [s for s in self._remaining if  s.status == Status.Finished.value]
+            crashed = [s for s in self._remaining if  s.status == Status.Crashed.value]
+            for fin in finished:
+                self._remaining.remove(fin)
+                self._done.append(fin)
+            for cr in crashed:
+                self._remaining.remove(cr)
+                self._crashed.append(cr)
+
+    def fetch_next(self):
+        if len(self._remaining) < 1:
+            logger.info('Worker exiting, since no calculations are available any more')
+            result = None
+        else:
+            candidate = self._remaining.pop(0)
+            def is_valid(direct, cand):
+                with working_directory(join(direct, cand.folder)):
+                    locks = glob('*.lock')
+                    if len(locks) != 0:
+                        return False
+                    # Lets wait if probably another worker want's to have this directory
+
+    return result
+
+
     def run(self) -> None:
-        if self.initialize():
-            return
+        self.initialize()
         calculation = self.fetch_next()
         while calculation is not None:
             success = self.calculate(calculation)
             logger.info('Finished calculation "%i" in folder "%s" = %s' % (calculation[0], calculation[1], success))
             calculation = self.fetch_next()
-
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
