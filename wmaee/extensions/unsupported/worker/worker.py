@@ -158,8 +158,9 @@ class CalculationWorker(Thread):
 
     def calculate(self, calculation):
         calculation_id, folder, _ = calculation
+        print('Running calculation directory "%s"' % join(self._directory, folder))
         try:
-            print('Running calculation directory "%s"' % join(self._directory, folder))
+
             with working_directory(directory):
                 if exists('call.json'):
                     with open('call.json', 'r') as h:
