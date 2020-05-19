@@ -66,9 +66,13 @@ def initialize(directory, dbfname, prefix):
                     bulk.append(data)
                 with database(fname=dbfname) as db:
                     db.insert_multiple(bulk)
+                initialized = True
         else:
             logger.info('Skipped initialization')
-            pass
+            initialized = False
+
+    if initialized:
+        sys.exit()
 
 
 def fetch_next(directory, dbfname):
