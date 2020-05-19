@@ -1,7 +1,7 @@
 import sys
 import logging
 import json
-from filelock import FileLock
+from wmaee.extensions.unsupported.worker.filelock import FileLock
 from tinydb import Query, TinyDB
 from threading import Thread
 from enum import Enum
