@@ -132,7 +132,8 @@ class CalculationWorker(Thread):
                                 status = Status.Finished.value
                         else:
                             status = Status.Queue.value
-                        bulk.append(Calculation(calculation_id=c_id, folder=fd, status=status, started=None, finished=None))
+                        finished = datetime.now() if status == Status.Finished.value else None
+                        bulk.append(Calculation(calculation_id=c_id, folder=fd, status=status, started=None, finished=finished))
                     with database_session() as session:
                         for calculation in bulk:
                             session.add(calculation)
