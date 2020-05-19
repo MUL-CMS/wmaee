@@ -91,6 +91,7 @@ def fetch_next(directory, dbfname):
 
 def calculate(calculation, directory):
     try:
+        print('Runnung calculation directory "%s"'% directory)
         with working_directory(directory):
             if exists('call.json'):
                 with open('call.json', 'r') as h:
