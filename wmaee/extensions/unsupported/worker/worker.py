@@ -12,13 +12,14 @@ from tqdm import tqdm
 from wmaee import working_directory, Poscar, vasp, parse_output
 
 logger = logging.getLogger(__file__)
-
+# One day of timeout limit
+LOCK_TIMEOUT = (24*2600)
 
 class LockedTinyDB(TinyDB):
 
     def __init__(self, filename, *args, **kwargs):
         super(LockedTinyDB, self).__init__(filename, *args, **kwargs)
-        self._filelock = FileLock(filename)
+        self._filelock = FileLock(filename, timeout=LOCK_TIMEOUT)
 
     def __enter__(self):
         result = super(LockedTinyDB, self).__enter__()
@@ -43,6 +44,7 @@ class Status(Enum):
     Finished = 1
     Crashed = 2
     Running = 3
+
 
 
 def initialize(directory, dbfname, prefix):
