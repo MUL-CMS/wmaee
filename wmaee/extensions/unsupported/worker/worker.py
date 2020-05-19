@@ -167,9 +167,7 @@ class CalculationWorker(Thread):
                 else:
                     kwargs = {}
                 with working_directory(folder):
-                    from time import sleep
-                    # vasp(**kwargs)
-                    sleep(1)
+                    vasp(**kwargs)
                     success = True
                 status = Status.Finished.value
         except Exception as e:
