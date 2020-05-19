@@ -8,9 +8,11 @@ from wmaee.core.types import Atoms
 
 ArrayLike = Union[np.ndarray, Collection]
 
+from matplotlib import pyplot as plt
+
 
 def sampling_function(x: ArrayLike, mu: float, num: int, pot: Tuple[float, float],
-                      indices: Optional[bool] = False) -> ArrayLike:
+                      indices: Optional[bool] = False, type='lj') -> ArrayLike:
     """
     Calculates the asymmetric sampling with Mie-potential weights, around the equilibrium mu and returns the samples.
     :param x: (np.ndarray) the axis whish should be sampled
@@ -21,12 +23,27 @@ def sampling_function(x: ArrayLike, mu: float, num: int, pot: Tuple[float, float
     :return: (np.ndarray or list) the samples between np.amin(x) and np.amax(x) including the boundaries
     """
     # LJ sampling
-    sampling_importance = np.power(mu * np.reciprocal(x), pot[0]) - 2 * np.power(mu * np.reciprocal(x), pot[1])
-    sampling_importance[sampling_importance > 0] = 0.0
-    sampling_importance = np.abs(sampling_importance)
+
+    x[np.isclose(x, 0.0)] = 1.0e-20
+    if isinstance(type, str):
+        if type.startswith('lj'):
+            sampling_importance = np.power(mu * np.reciprocal(x), pot[0]) - 2 * np.power(mu * np.reciprocal(x), pot[1])
+            sampling_importance = np.abs(sampling_importance)
+        elif type.startswith('g'):
+            sampling_importance = np.exp(-pot[0] * np.power(x - mu, 2) / (pot[1] ** 2))
+        elif type.startswith('i'):
+            sampling_importance = np.power(np.reciprocal(x - mu), pot[0])
+            sampling_importance[sampling_importance > 100] = 100
+    else:
+        sampling_importance = type
     # cute the negative values
     if np.any(np.isclose(sampling_importance, 0.0)):
-        max_zero_index = np.amax(np.array(np.argwhere(np.isclose(sampling_importance, 0)).flat))
+        max_zero_index = 0
+        for i, d in enumerate(sampling_importance):
+            if np.isclose(d, 0, atol=1.0e-8):
+                max_zero_index = i
+            else:
+                break
         sampling_importance = sampling_importance[max_zero_index:]
     sampling_importance /= np.amax(sampling_importance)
     # calculate the step size
@@ -35,10 +52,11 @@ def sampling_function(x: ArrayLike, mu: float, num: int, pot: Tuple[float, float
     norm = np.amax(integration)
     areas = integration / norm * num
     si = [0]
+
     # Find the sample indices by minimizing the distance to a certain step
     for sample in range(1, num - 1):
         re = np.abs(areas - sample)
-        si.append(list(np.argwhere(re == np.amin(re)).flat)[0])
+        si.append(list(np.argmin(re).flat)[0])
     si.append(len(areas) - 1)
     fine_axis = np.linspace(np.amin(x), np.amax(x), num=np.amax(si) + 1)
     samples = [fine_axis[fis] for fis in si]
@@ -57,31 +75,42 @@ def sample_triangle(start: float, cut: float, mu: float, num: Optional[int] = 50
     :param pot: (tuple of int) the powers of the Mie.Potential weighting function
     :return: (np.ndarray) a array with num**3 rows, and 3 columns which are r_ik, rjk and theta_ijk
     """
-    x = np.linspace(start, cut, num=10000)
+    x = np.linspace(start, cut, num=1000)
     x[np.isclose(x, 0.0)] = 1e-10
     samples = sampling_function(x, mu, num, pot)
 
     # we have to calculate the minimal angles needed to keep the minimum distance
     min_angles = 2 * np.arcsin(start / (2 * np.array(samples)))
-    max_angles = np.zeros_like(min_angles) + np.pi
     coords = []
     num_samples = 0
-    for rsample, min_angle, max_angle, in tqdm(zip(samples, min_angles, max_angles), total=num):
-        angles = np.linspace(min_angle, max_angle, num=10000)
-        second = np.array([rsample * np.ones_like(angles), np.zeros_like(angles), np.zeros_like(angles)])
-        for ksample in samples:
+    ashape = (5000,)
+    for rsample in tqdm(samples, total=num):
+        max_angle = np.pi
+        second = np.array([rsample * np.ones(ashape), np.zeros(ashape), np.zeros(ashape)])
+        for kk, ksample in enumerate(samples):
+            if abs(ksample - rsample) > start:
+                min_angle = 0.0
+            else:
+                h = np.sqrt(start**2 - abs(rsample - ksample)**2)
+                min_angle = np.arcsin(h / ksample)
+            angles = np.linspace(min_angle, max_angle, num=ashape[0])
             third = np.array([ksample * np.cos(angles), ksample * np.sin(angles), np.zeros_like(angles)])
             dists = np.linalg.norm(third - second, axis=0)
-
             if np.amax(dists) < mu:
-
                 for ang in np.linspace(min_angle, max_angle, num=num):
                     coords.append((rsample, ksample, ang))
             else:
-
-                si = sampling_function(dists, mu, num, pot, indices=True)
+                sf = np.power(np.reciprocal(np.abs(dists-mu)), 0.4)
+                si = sampling_function(np.linspace(np.amin(dists), np.amax(dists)), mu, num, pot=pot, indices=True, type=sf)
+                cnum = 4
+                last = si[-cnum:]
+                d = int(round((np.amax(last) - np.amin(last)) / cnum))
+                last = [np.amin(last)+ i * d for i in range(len(last))]
+                for i, li in enumerate(reversed(last)):
+                    si[-(i+1)] = li
                 fine_axis = np.linspace(min_angle, max_angle, num=np.amax(si) + 1)
                 ang_samples = [fine_axis[fis] for fis in si]
+                #ang_samples = np.linspace(min_angle, max_angle, num=num)
                 for ang in (ang_samples if num_samples % 2 == 0 else reversed(ang_samples)):
                     coords.append((rsample, ksample, ang))
                 num_samples += 1

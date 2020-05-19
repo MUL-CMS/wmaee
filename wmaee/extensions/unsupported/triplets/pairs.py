@@ -4,7 +4,7 @@ from wmaee.core.types import Atoms, Collection, Union, Optional, Tuple, Iterable
 from ase import Atoms as AseAtoms
 
 def sample_pair_axes(start: float, cut: float, mu: float, num: Optional[int] = 50,
-                     pot: Tuple[float, float] = (5, 1)) -> ArrayLike:
+                     pot: float = (5, 1)) -> ArrayLike:
     """
     Samples a half circle of triplets, from a minimum distance to the a maximum distance of "cut" and denser
     sampling around "mu", where "pot" are the weights of a Mie-Type weighting function
