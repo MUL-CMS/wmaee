@@ -96,9 +96,7 @@ def calculate(calculation, directory):
             else:
                 kwargs = {}
             with working_directory(calculation['folder']):
-                from time import sleep
-                sleep(0.1)
-                # vasp(**kwargs)
+                vasp(**kwargs)
                 output = parse_output()
                 results = {
                     'E': output.final_energy,
