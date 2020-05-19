@@ -15,6 +15,7 @@ logger = logging.getLogger(__file__)
 # One day of timeout limit
 LOCK_TIMEOUT = (24*2600)
 
+
 class LockedTinyDB(TinyDB):
 
     def __init__(self, filename, *args, **kwargs):
@@ -44,7 +45,6 @@ class Status(Enum):
     Finished = 1
     Crashed = 2
     Running = 3
-
 
 
 def initialize(directory, dbfname, prefix):
