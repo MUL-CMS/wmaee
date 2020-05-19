@@ -1,8 +1,6 @@
 import sys
 import logging
 import json
-from wmaee.extensions.unsupported.worker.filelock import FileLock
-from tinydb import Query, TinyDB
 from threading import Thread
 from enum import Enum
 from glob import glob
@@ -10,34 +8,69 @@ from os.path import exists, basename, dirname, join
 from os import getcwd
 from tqdm import tqdm
 from wmaee import working_directory, Poscar, vasp, parse_output
-
+from wmaee.core.common import fullname
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Integer, DateTime, create_engine
+from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
+from datetime import datetime
 logger = logging.getLogger(__file__)
 # One day of timeout limit
 LOCK_TIMEOUT = (24*2600)
 
+__DATABASE_SESSION = None
+__DATABASE_ENGINE = None
 
-class LockedTinyDB(TinyDB):
-
-    def __init__(self, filename, *args, **kwargs):
-        super(LockedTinyDB, self).__init__(filename, *args, **kwargs)
-        self._filelock = FileLock(filename, timeout=LOCK_TIMEOUT)
-
-    def __enter__(self):
-        result = super(LockedTinyDB, self).__enter__()
-        self._filelock.acquire()
-        return result
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        result = super(LockedTinyDB, self).__exit__(exc_type, exc_val, exc_tb)
-        self._filelock.release()
-        return result
+Base = declarative_base()
 
 
-def database(fname):
-    return LockedTinyDB(fname)
+
+def get_connection_string(fname: str) -> str:
+    return 'sqlite:///%s' % fname
 
 
-Calculations = Query()
+class Calculation(Base):
+
+    __tablename__ = 'calculations'
+    calculation_id = Column(Integer, primary_key=True)
+    folder = Column(String(512), nullable=False)
+    status = Column(Integer, nullable=False)
+    started = Column(DateTime, nullable=True)
+    finished = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return '%s(id=%i, folder=%s, status=%i)' % (fullname(self), self.calculation_id, self.folder, self.status)
+
+
+def make_engine(fname=None):
+    global __DATABASE_ENGINE
+    if __DATABASE_ENGINE is None:
+        __DATABASE_ENGINE = create_engine(get_connection_string(fname))
+        # bind the metadata to the engine
+        Base.metadata.bind = __DATABASE_ENGINE
+    return __DATABASE_ENGINE
+
+
+def get_session(engine=None):
+    global __DATABASE_SESSION
+    if __DATABASE_SESSION is None:
+        __DATABASE_SESSION = sessionmaker(bind=engine)
+    return __DATABASE_SESSION
+
+
+@contextmanager
+def database_session():
+    """Provide a transactional scope around a series of operations."""
+    session = get_session()()
+    try:
+        yield session
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        logger.exception('Transaction failed!', exc_info=exc)
+        raise
+    finally:
+        session.close()
 
 
 class Status(Enum):
@@ -47,83 +80,11 @@ class Status(Enum):
     Running = 3
 
 
-def initialize(directory, dbfname, prefix):
-    with working_directory(directory):
-        if not exists(dbfname):
-            # collect all the structures
-            folder_prefix = prefix
-            calcs = glob(folder_prefix)
-            if len(calcs) > 0:
-                bulk = []
-                for c_id, fd in tqdm(enumerate(calcs), total=len(calcs)):
-                    data = {
-                        'id': c_id,
-                        'folder': fd,
-                        'structure': Poscar.from_file(join(fd, 'POSCAR')).structure.as_dict(),
-                        'status': Status.Queue.value,
-                        'results': {}
-                    }
-                    bulk.append(data)
-                with database(fname=dbfname) as db:
-                    db.insert_multiple(bulk)
-                initialized = True
-        else:
-            logger.info('Skipped initialization')
-            initialized = False
-
-    if initialized:
-        sys.exit()
-
-
-def fetch_next(directory, dbfname):
-    with working_directory(directory):
-        with database(fname=dbfname) as db:
-            remaining = db.search(Calculations.status == Status.Queue.value)
-            if len(remaining) < 1:
-                logger.info('Worker exiting, since no calculations are available any more')
-                result = None
-            else:
-                first_element = next(iter(remaining))
-                first_id = first_element['id']
-                # tell the database that it is running now
-                db.update(dict(status=Status.Running.value), Calculations.id == first_id)
-                first_element['status'] = Status.Running.value
-                result = first_element
-
-        return result
-
-
-def calculate(calculation, directory):
-    try:
-        print('Runnung calculation directory "%s"'% directory)
-        with working_directory(directory):
-            if exists('call.json'):
-                with open('call.json', 'r') as h:
-                    kwargs = json.loads(h.read())
-            else:
-                kwargs = {}
-            with working_directory(calculation['folder']):
-                vasp(**kwargs)
-                output = parse_output()
-                results = {
-                    'E': output.final_energy,
-                    'forces': list(output.final_forces)
-                }
-                calculation['results'] = results
-                calculation['status'] = Status.Finished.value
-                success = True
-    except Exception as e:
-        logger.exception('An error occured while processing folder "%s"' % calculation['folder'], exc_info=e)
-        calculation['status'] = Status.Crashed.value
-        success = False
-    return success, calculation
-
-
-def update_calculation(calculation, directory, dbfname):
-    cid = calculation['id']
-    with working_directory(directory):
-        with database(fname=dbfname) as db:
-            db.update(dict(status=calculation['status'], results=calculation['results']), Calculations.id == cid)
+def show_calculations(fname):
+    engine = create_engine(get_connection_string(fname))
+    import pandas as pd
+    with engine.connect() as connection:
+        return pd.read_sql_table(Calculation.__tablename__, connection)
 
 
 class CalculationWorker(Thread):
@@ -138,19 +99,97 @@ class CalculationWorker(Thread):
         else:
             self.folder_prefix = prefix
         if dbfname is None:
-            self._dbfname = '%s.tinydb.json' % self.name
+            self._dbfname = '%s.db' % self.name
         else:
             self._dbfname = dbfname
         self._directory = directory
+        self._engine = make_engine(fname=join(self._directory, self._dbfname))
+        self._session_meta = get_session(self._engine)
+
+    def initialize_database(self):
+        Base.metadata.create_all(self._engine)
+        # After that we can bind it
+
+    def initialize(self):
+        with working_directory(self._directory):
+            if not exists(self._dbfname):
+                # collect all the structures
+                self.initialize_database()
+                # Now the database does not yet exist we have to create the datatable
+                folder_prefix = self.folder_prefix
+                calcs = glob(folder_prefix)
+                if len(calcs) > 0:
+                    bulk = []
+                    for c_id, fd in tqdm(enumerate(calcs), total=len(calcs)):
+                        xml_path = join(fd, 'vasprun.xml')
+                        if exists(xml_path):
+                            try:
+                                with working_directory(fd):
+                                    parse_output()
+                            except Exception:
+                                status = Status.Crashed.value
+                            else:
+                                status = Status.Finished.value
+                        else:
+                            status = Status.Queue.value
+                        bulk.append(Calculation(calculation_id=c_id, folder=fd, status=status, started=None, finished=None))
+                    with database_session() as session:
+                        for calculation in bulk:
+                            session.add(calculation)
+                    initialized = True
+            else:
+                logger.info('Skipped initialization')
+                initialized = False
+        return initialized
+
+    def fetch_next(self):
+        with database_session() as session:
+            remaining = session.query(Calculation).filter(Calculation.status == Status.Queue.value).count()
+            if remaining < 1:
+                logger.info('Worker exiting, since no calculations are available any more')
+                result = None
+            else:
+                first_calculation = session.query(Calculation).filter(Calculation.status == Status.Queue.value).first()
+                first_calculation.started = datetime.now()
+                first_calculation.status = Status.Running.value
+                result = (first_calculation.calculation_id, first_calculation.folder, first_calculation.status)
+        return result
+
+    def calculate(self, calculation):
+        calculation_id, folder, _ = calculation
+        try:
+            print('Running calculation directory "%s"' % join(self._directory, folder))
+            with working_directory(directory):
+                if exists('call.json'):
+                    with open('call.json', 'r') as h:
+                        kwargs = json.loads(h.read())
+                else:
+                    kwargs = {}
+                with working_directory(folder):
+                    from time import sleep
+                    # vasp(**kwargs)
+                    sleep(1)
+                    success = True
+                status = Status.Finished.value
+        except Exception as e:
+            logger.exception('An error occurred while processing folder "%s"' % folder, exc_info=e)
+            status = Status.Crashed.value
+            success = False
+        # logger
+        with database_session() as session:
+            calc = session.query(Calculation).filter(Calculation.calculation_id == calculation_id).one()
+            calc.status = status
+            calc.finished = datetime.now()
+        return success
 
     def run(self) -> None:
-        initialize(self._directory, self._dbfname, self.folder_prefix)
-        calculation = fetch_next(self._directory, self._dbfname)
+        if self.initialize():
+            return
+        calculation = self.fetch_next()
         while calculation is not None:
-            success, result = calculate(calculation, self._directory)
-            logger.info('Finished calculation "%i" in folder "%s"' % (result['id'], result['folder']))
-            update_calculation(result, self._directory, self._dbfname)
-            calculation = fetch_next(self._directory, self._dbfname)
+            success = self.calculate(calculation)
+            logger.info('Finished calculation "%i" in folder "%s" = %s' % (calculation[0], calculation[1], success))
+            calculation = self.fetch_next()
 
 
 if __name__ == '__main__':

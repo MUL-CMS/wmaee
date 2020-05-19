@@ -85,13 +85,12 @@ def _run_vasp_internal(directory: Optional[Directory] = None, cpus: Optional[int
             shell.run(preamble)
             output = shell.run(command, return_out=return_stdout, return_exit=True)
 
-        print(output)
         if return_stdout:
             _, exitcode, output = output
         else:
             _, exitcode = output
 
-        if not exitcode != 0:
+        if exitcode != 0:
             logger.warning('VASP did not execute successfully! Exit-Code: "{}"'.format(exitcode))
 
         return exitcode if not return_stdout else (exitcode, output)

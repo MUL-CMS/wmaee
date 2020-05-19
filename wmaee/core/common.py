@@ -23,6 +23,17 @@ ShellStreams = Union[None, TextIO, Collection[TextIO]]
 ShellStream = Union[None, TextIO]
 
 
+def fullname(thing):
+    """
+    Returns the fully qualified name string of the cls
+    :return: (str) the class identifier
+    """
+    name = '.'.join([
+        thing.__module__,
+        thing.__class__.__name__
+    ])
+    return name
+
 def remove_white(string: str) -> str:
     """
     Removes all whitespaces in a given string
