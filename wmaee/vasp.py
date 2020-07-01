@@ -377,8 +377,6 @@ def parse_output(directory=None, raise_exc=True):
     :param directory: (str or working_directory) the directory where the output files are located (default: None)
     :return: (VASPOutput) the VASPOutput object
     """
-
-
     if directory is None:
         directory = working_directory(getcwd())
 
@@ -395,6 +393,7 @@ def parse_output(directory=None, raise_exc=True):
         for f in files:
             data.append((f, _parse_archive(f, raise_exc=raise_exc)))
         return data
+
 
 def full_run(inp: VASPInput, directory: Optional[Union[Directory, None]] = None, cpus: Optional[int] = 2,
              show_output: Optional[bool] = True, application: Optional[Union[str, None]] = None,
