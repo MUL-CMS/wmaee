@@ -10,7 +10,11 @@ from pymatgen import Structure
 from ase import Atoms
 from uuid import uuid4
 from os import getcwd
-from os.path import exists
+from io import TextIOWrapper
+from glob import glob
+from fnmatch import fnmatch
+from os.path import exists, isfile, isdir, join, dirname
+from tarfile import open as tar_open
 
 
 def _write_input(structure: Union[Atoms, Collection[Atoms], Callable, Poscar], incar: Union[str, Incar],
@@ -302,26 +306,95 @@ class VASPOutput(LoggerMixin):
         return parse_output(directory=directory)
 
 
-def parse_output(directory: Optional[Union[Directory, None]] = None):
+def _parse_archive(a : str, raise_exc: Optional[bool] = True) -> Union[VASPOutput, List[VASPOutput]]:
+    """
+    TODO: Add some documentations here
+    :param a:
+    :param raise_exc:
+    :return:
+    """
+    def _zopen_fake(filename, mode='r'):
+        return filename
+    # we have to inject some custom function, to make pymatgen.io.vasp.Vasprun work also with file-like objects
+    path_pattern = '*vasprun.xml'
+    module_vasprun = sys.modules[Vasprun.__module__]
+    module_potcar = sys.modules[Potcar.__module__]
+    old_zopen = getattr(module_vasprun, 'zopen')
+    old_get_potcars = getattr(Vasprun, 'get_potcars')
+
+    with tar_open(a) as archive:
+        vasp_run_candidates = [m for m in archive.getmembers() if fnmatch(m.name, path_pattern)]
+        if len(vasp_run_candidates) < 1:
+            raise FileNotFoundError('Could not find VASP output file "vasprun.xml"')
+
+        try:
+            out_handles = [archive.extractfile(cand) for cand in vasp_run_candidates]
+            setattr(module_vasprun, 'zopen', _zopen_fake)
+            setattr(module_potcar, 'zopen', _zopen_fake)
+
+            out_data = []
+            for out_h, cnd in zip(out_handles, vasp_run_candidates):
+                potcar_member = archive.getmember(join(dirname(cnd.name), 'POTCAR'))
+                potcar_handle = TextIOWrapper(archive.extractfile(potcar_member))
+                potcar = Potcar.from_file(potcar_handle)
+
+                def _get_potcars_fake(self, path):
+                    return potcar
+
+                setattr(Vasprun, 'get_potcars', _get_potcars_fake)
+                out_data.append(VASPOutput.create(Vasprun(out_h)))
+        except:
+            if raise_exc:
+                raise
+        finally:
+            setattr(module_vasprun, 'zopen', old_zopen)
+            setattr(module_potcar, 'zopen', old_zopen)
+            setattr(Vasprun, 'get_potcars', old_get_potcars)
+    return out_data[0] if len(out_data) == 1 else out_data
+
+
+def _parse_directory(d : working_directory, raise_exc = True) -> VASPOutput:
+    """
+    Parses a VASP calculation directory
+    :param d: (working_directory)
+    :param raise_exc: (bool)
+    :return: (VASPOutput)
+    """
+    with d:
+        if not exists('vasprun.xml'):
+            raise FileNotFoundError('Could not find VASP output file "vasprun.xml"')
+        try:
+            vasprun = Vasprun('vasprun.xml')
+        except Exception:
+            if raise_exc:
+                raise
+        return VASPOutput.create(vasprun)
+
+
+def parse_output(directory=None, raise_exc=True):
     """
     Parses the output from VASP. Searches for 'vasprun.xml' file
     :param directory: (str or working_directory) the directory where the output files are located (default: None)
     :return: (VASPOutput) the VASPOutput object
     """
+
+
     if directory is None:
         directory = working_directory(getcwd())
 
     if isinstance(directory, working_directory):
-        pass
+        return _parse_directory(directory, raise_exc=raise_exc)
     elif isinstance(directory, str):
-        directory = working_directory(directory)
+        dirs = glob(directory)
+        directories = [d for d in dirs if isdir(d)]
+        files = [d for d in dirs if isfile(d)]
 
-    with directory:
-        if not exists('vasprun.xml'):
-            raise FileNotFoundError('Could not find VASP output file "vasprun.xml"')
-        vasprun = Vasprun('vasprun.xml')
-        return VASPOutput.create(vasprun)
-
+        data = []
+        for d in directories:
+            data.append((d, _parse_directory(working_directory(d), raise_exc=raise_exc)))
+        for f in files:
+            data.append((f, _parse_archive(f, raise_exc=raise_exc)))
+        return data
 
 def full_run(inp: VASPInput, directory: Optional[Union[Directory, None]] = None, cpus: Optional[int] = 2,
              show_output: Optional[bool] = True, application: Optional[Union[str, None]] = None,
@@ -408,8 +481,8 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
         raise TypeError('For VASP Interactive "%s" is not allowed.' % type(inp.structure).__name__)
     stopcar = Incar(dict(LSTOP=True))
     # Check in INTERACTIVE = .True. in INCAR file
-    if 'INTERACTIVE' not in inp.incar or not inp.incar['INTERACTIVE']:
-        inp.incar['INTERACTIVE'] = True
+    inp.incar['INTERACTIVE'] = True
+    inp.incar['ISYM'] = 0
 
     with directory:
         preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname,
@@ -421,6 +494,7 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
 
         if is_last:
             inp.incar['INTERACTIVE'] = False
+            inp.incar['ISYM'] = 0
             inp.incar['NSW'] = 0
             # Then we have to remove the interactive tag
         _write_input(structure=current_structure, incar=inp.incar, potcar=inp.potcar, kpoints=inp.kpoints,
@@ -439,9 +513,9 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
             def set_new_positions():
                 is_last, next_structure = generator()
                 next_structure = to_pymatgen(next_structure)
-                for fx, fy, fz in next_structure.frac_coords:
-                    input_line = '%.7f %.7f %.7f\n' % (fx, fy, fz)
-                    shell._send_command(input_line, raw=True)
+                for atom in next_structure.frac_coords:
+                    text = " ".join(map("{:19.16f}".format, atom))
+                    shell._send_command(text+'\n', raw=True)
                 if is_last:
                     stopcar.write_file('STOPCAR')
                     shell._send_command('exit\n', raw=True)
@@ -473,7 +547,7 @@ def vasp_interactive(inp: VASPInput, directory: Optional[Union[Directory, None]]
                      hostname: Optional[Union[str, None]] = None,
                      partition: Optional[Union[str, None]] = None,
                      callbacks: Optional[Collection[Callable]] = None,
-                     output: Optional[Union[Collection[TextIO]]]=None):
+                     output: Optional[Union[Collection[TextIO]]] = None):
     """
     Run VASP in a given directory. The maximum number of cores is limited to six. If no directory is specified VASP
     will be executed on os.getcwd() directory
