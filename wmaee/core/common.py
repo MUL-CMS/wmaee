@@ -133,9 +133,11 @@ def is_ipython():
 
 if is_ipython():
     from tqdm import tqdm_notebook
+
     tqdm = tqdm_notebook
 else:
     from tqdm import tqdm as tqdm_
+
     tqdm = tqdm_
 
 
@@ -164,6 +166,7 @@ class OutputEmitter(LoggerMixin):
         if self._trigger in line:
             self.trigger.fire()
 
+
 class Shell(LoggerMixin):
     __instance = None
 
@@ -171,7 +174,8 @@ class Shell(LoggerMixin):
                  stderr: Optional[ShellStreams] = sys.stderr,
                  stdin: Optional[ShellStreams] = None, out_log: Optional[Union[None, TextIO, str]] = None,
                  err_log: Optional[Union[None, TextIO, str]] = None, time: Optional[float] = 0.0001,
-                 timing: Optional[float] = True, shell_cmd: Optional[str] = '/bin/bash'):
+                 timing: Optional[float] = True, shell_cmd: Optional[str] = '/bin/bash',
+                 encoding: Optional[str] = 'utf-8'):
         """
         Constructs a bash/sh/zsh shell instance
         :param restart: (bool) flag wether to automatically restart the shell subprocess if it died [default: True]
@@ -187,9 +191,9 @@ class Shell(LoggerMixin):
         super(Shell, self).__init__()
         self._shell_cmd: str = shell_cmd
         self._shell_handle: Popen = Popen(shlex.split(self._shell_cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        self._shell_stdin: TextIO = TextIOWrapper(self._shell_handle.stdin, encoding='utf-8')
-        self._shell_stdout: TextIO = TextIOWrapper(self._shell_handle.stdout, encoding='utf-8')
-        self._shell_stderr: TextIO = TextIOWrapper(self._shell_handle.stderr, encoding='utf-8')
+        self._shell_stdin: TextIO = TextIOWrapper(self._shell_handle.stdin, encoding=encoding)
+        self._shell_stdout: TextIO = TextIOWrapper(self._shell_handle.stdout, encoding=encoding)
+        self._shell_stderr: TextIO = TextIOWrapper(self._shell_handle.stderr, encoding=encoding)
         self._shell: Tuple[Popen, TextIO, TextIO, TextIO] = (
             self._shell_handle, self._shell_stdin, self._shell_stdout, self._shell_stderr)
         self._restart: bool = restart
@@ -602,4 +606,3 @@ class Shell(LoggerMixin):
         """
         if self.alive:
             self.close()
-
