@@ -12,7 +12,13 @@ from wmaee.vis import view
 from wmaee.vasp import VASPInput, VASPOutput, parse_output, write_input, full_run, vasp, vasp_interactive
 
 # LAMMPS related stuff based on pyiron
-from wmaee.lammps import LAMMPSCalculation
+# make sure wmaee work - at least the DFT part - also if pyiron is not installed
+try:
+    import pyiron
+except ImportError:
+    pass
+else:
+    from wmaee.lammps import LAMMPSCalculation
 # import the shell
 from wmaee.core.runner import Shell
 
@@ -33,4 +39,4 @@ from wmaee.wmaee import greet as _greet
 
 # register view wrapper
 
-_greet()
+# _greet()

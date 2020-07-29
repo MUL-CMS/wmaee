@@ -97,3 +97,28 @@ def add_method(cls: type, doc: Optional[Union[None, str]]) -> Callable:
         # Note we are not binding func, but wrapper which accepts self but does exactly the same as func
         return func # returning func means func can still be used normally
     return decorator
+
+
+def animate(structures: List[Union[Structure, AseAtoms, IronAtoms]], spacefill: Optional[bool]=True, show_cell: Optional[bool]=True, stride: Optional[int]=1, center_of_mass: Optional[bool]=False, particle_size: Optional[float]=0.5):
+    """
+    Animates a structure and plays a movie using nglview
+    :param structures: (list of Atoms or Structures) the images to visualize
+    :param spacefill: (bool) wether to use spacefill style for the particles or not [default: True]
+    :param show_cell: (bool) flag for displaying the unit cell [default: True]
+    :param stride: (int) the stride, when you want to skip  images [default=1]
+    :param center_of_mass: (bool) keep center of mass
+    :param particle_size: (float) the default size of the particles
+    :return: (nglview.view)
+    """
+    try:
+        import nglview
+    except ImportError:
+        raise ImportError("The animate() function requires the package nglview to be installed")
+
+    animation = nglview.show_asetraj([to_ase(s) for s in structures])
+    if spacefill:
+        animation.add_spacefill(radius_type='vdw', scale=0.5)
+        animation.remove_ball_and_stick()
+    else:
+        animation.add_ball_and_stick()
+    return animation
