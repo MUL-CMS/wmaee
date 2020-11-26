@@ -30,6 +30,8 @@ from os.path import isfile, isdir, join, exists
 # Greet the user
 from wmaee.wmaee import greet as _greet
 
+# trigger monkey patches for external modules
+import wmaee.extensions.external
 # register view wrapper
 
 _greet()
