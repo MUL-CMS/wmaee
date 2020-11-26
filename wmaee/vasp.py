@@ -408,8 +408,12 @@ def _vasp_interactive_internal(inp: VASPInput, directory: Optional[Union[Directo
         raise TypeError('For VASP Interactive "%s" is not allowed.' % type(inp.structure).__name__)
     stopcar = Incar(dict(LSTOP=True))
     # Check in INTERACTIVE = .True. in INCAR file
-    if 'INTERACTIVE' not in inp.incar or not inp.incar['INTERACTIVE']:
-        inp.incar['INTERACTIVE'] = True
+    inp.incar['INTERACTIVE'] = True
+    # make sure ISYM and IBRION is set correctly
+    #(parameter="IBRION", value=-1)
+    #self._check_incar_parameter(parameter="POTIM", value=0.0)
+    #self._check_incar_parameter(parameter="NSW", value=1000)
+    #(self._check_incar_parameter(parameter="ISYM", value=0)
 
     with directory:
         preamble, command, binary = get_vasp_configuration(application=application, hostname=hostname,

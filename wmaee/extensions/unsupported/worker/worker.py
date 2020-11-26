@@ -16,9 +16,14 @@ from contextlib import contextmanager
 from datetime import datetime
 from collections import namedtuple
 from time import sleep
+from uuid import uuid4
+from random import random
+from filelock import FileLock, Timeout
+from os import remove
+
 logger = logging.getLogger(__file__)
 # One day of timeout limit
-LOCK_TIMEOUT = (24*2600)
+LOCK_TIMEOUT = (24 * 2600)
 
 __DATABASE_SESSION = None
 __DATABASE_ENGINE = None
@@ -26,13 +31,11 @@ __DATABASE_ENGINE = None
 Base = declarative_base()
 
 
-
 def get_connection_string(fname: str) -> str:
     return 'sqlite:///%s' % fname
 
 
 class Calculation(Base):
-
     __tablename__ = 'calculations'
     calculation_id = Column(Integer, primary_key=True)
     folder = Column(String(512), nullable=False)
@@ -135,7 +138,8 @@ class CalculationWorker(Thread):
                         else:
                             status = Status.Queue.value
                         finished = datetime.now() if status == Status.Finished.value else None
-                        bulk.append(Calculation(calculation_id=c_id, folder=fd, status=status, started=None, finished=finished))
+                        bulk.append(
+                            Calculation(calculation_id=c_id, folder=fd, status=status, started=None, finished=finished))
                     with database_session() as session:
                         for calculation in bulk:
                             session.add(calculation)
@@ -184,9 +188,13 @@ class CalculationWorker(Thread):
         return success
 
 
-
-
 class SimpleCalculationWorker(Thread):
+    class Calculation:
+
+        def __init__(self, calculation_id, folder, status):
+            self.calculation_id = calculation_id
+            self.folder = folder
+            self.status = status
 
     def __init__(self, directory, dbfname=None, prefix=None, *args, **kwargs):
         super(SimpleCalculationWorker, self).__init__(*args, **kwargs)
@@ -205,8 +213,8 @@ class SimpleCalculationWorker(Thread):
         self._done = []
         self._remaining = []
         self._crashed = []
+        self._lock = None
         self._lock_file_name = None
-        self._calc_meta = namedtuple('CalculationTuple', ['calculation_id', 'folder', 'status'])
 
     def _get_status(self, pth):
         xml_path = join(pth, 'vasprun.xml')
@@ -230,7 +238,7 @@ class SimpleCalculationWorker(Thread):
             if len(calcs) > 0:
                 for c_id, fd in tqdm(enumerate(calcs), total=len(calcs)):
                     status = self._get_status(fd)
-                    calc = self._calc_meta(calculation_id=c_id, folder=fd, status=status)
+                    calc = SimpleCalculationWorker.Calculation(calculation_id=c_id, folder=fd, status=status)
                     if status == Status.Queue.value:
                         self._remaining.append(calc)
                     elif status == Status.Finished.value:
@@ -242,8 +250,8 @@ class SimpleCalculationWorker(Thread):
         with working_directory(self._directory):
             for r in self._remaining:
                 r.status = self._get_status(r.folder)
-            finished = [s for s in self._remaining if  s.status == Status.Finished.value]
-            crashed = [s for s in self._remaining if  s.status == Status.Crashed.value]
+            finished = [s for s in self._remaining if s.status == Status.Finished.value]
+            crashed = [s for s in self._remaining if s.status == Status.Crashed.value]
             for fin in finished:
                 self._remaining.remove(fin)
                 self._done.append(fin)
@@ -252,28 +260,77 @@ class SimpleCalculationWorker(Thread):
                 self._crashed.append(cr)
 
     def fetch_next(self):
+        self._update_info_remaining()
         if len(self._remaining) < 1:
             logger.info('Worker exiting, since no calculations are available any more')
             result = None
         else:
             candidate = self._remaining.pop(0)
+
             def is_valid(direct, cand):
                 with working_directory(join(direct, cand.folder)):
                     locks = glob('*.lock')
-                    if len(locks) != 0:
+                    no_locks = len(locks) == 0
+                    if not no_locks:
                         return False
-                    # Lets wait if probably another worker want's to have this directory
+                    self._lock_file_name = '%s.lock' % candidate.folder
+                    self._lock = FileLock(self._lock_file_name)
+                    try:
+                        self._lock.acquire(3)
+                    except (TimeoutError, Timeout):
+                        # somebody else is running something here we cant lock the lock file, therefore let'S try the next one
+                        return False
+                    else:
+                        with open(self._lock_file_name, 'w') as h:
+                            h.write(self._lock_file_name)
+                        return True
 
-    return result
+            while not is_valid(self._directory, candidate):
+                # we have to reenter the candidate because we popped it
+                self._remaining.append(candidate)
+                candidate = self._remaining.pop(0)
 
+            # from now on we lock this file
+            result = candidate
+
+            # Lets wait if probably another worker want's to have this directory
+        return result
+
+    def calculate(self, calculation):
+        calculation_id, folder = calculation.calculation_id, calculation.folder
+        print('Running calculation directory "%s"' % join(self._directory, folder))
+        try:
+            with working_directory(directory):
+                if exists('call.json'):
+                    with open('call.json', 'r') as h:
+                        kwargs = json.loads(h.read())
+                else:
+                    kwargs = {}
+                with working_directory(folder):
+                    vasp(**kwargs)
+                    success = True
+                    self._lock.release()
+                    remove(self._lock_file_name)
+                status = Status.Finished.value
+
+
+        except Exception as e:
+            logger.exception('An error occurred while processing folder "%s"' % folder, exc_info=e)
+            status = Status.Crashed.value
+            success = False
+        # logger
+        calculation.status = status
+        return success
 
     def run(self) -> None:
         self.initialize()
         calculation = self.fetch_next()
         while calculation is not None:
             success = self.calculate(calculation)
-            logger.info('Finished calculation "%i" in folder "%s" = %s' % (calculation[0], calculation[1], success))
+            logger.info('Finished calculation "%i" in folder "%s" = %s' % (
+            calculation.calculation_id, calculation.folder, success))
             calculation = self.fetch_next()
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
@@ -284,7 +341,7 @@ if __name__ == '__main__':
     else:
         print(sys.argv)
         raise ValueError('Expects either one or two arguments')
-    runner = CalculationWorker(directory, dbfname=dbfname)
+    runner = SimpleCalculationWorker(directory, dbfname=dbfname)
     runner.setDaemon(True)
     runner.start()
     runner.join()
