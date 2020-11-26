@@ -1,0 +1,3 @@
+[submodule "parse-vasp-volumetric-rs"]
+    path = wmaee/extensions/external
+    url = https://git.unileoben.ac.at/p1655622/parse-vasp-volumetric-rs
