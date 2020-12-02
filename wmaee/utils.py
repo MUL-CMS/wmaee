@@ -4,7 +4,7 @@ from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovit
 from typing import Any, Collection, Optional, Union
 from pymatgen import Structure
 from ase import Atoms as AseAtoms
-from typing import Union, Callable
+from typing import Union, Callable, List
 from functools import wraps
 
 
