@@ -578,6 +578,11 @@ class Shell(LoggerMixin):
         """
         return iter(reversed(self._history))
 
+    @staticmethod
+    def _close_if_possible(obj):
+        if hasattr(obj, "close"):
+            obj.close()
+
     def close(self) -> NoReturn:
         """
         Closes the shell if it is still alive
@@ -587,6 +592,23 @@ class Shell(LoggerMixin):
             self._send_command('exit', raw=True)
             self._close.set()
             self._thr_dist.join()
+            for thread in self._threads:
+                thread.join(1)
+            # terminate the subprocess, after we have stopped the forwarder threads
+            self._shell_handle.terminate()
+            # now we have to close log files and so on
+            things_to_close = [
+                self._out_log_fd,
+                self._err_log_fd,
+                self._shell_stdout,
+                self._shell_stdin,
+                self._shell_stderr
+            ]
+            for thing in things_to_close:
+                try:
+                    self._close_if_possible(thing)
+                except RuntimeError:
+                    raise
 
     def __enter__(self, *args):
         """
