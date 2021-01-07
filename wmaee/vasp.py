@@ -415,11 +415,13 @@ def full_run(inp: VASPInput, directory: Optional[Union[Directory, None]] = None,
         result = _vasp_interactive_internal(inp, directory=directory, cpus=cpus, show_output=show_output,
                                             application=application,
                                             hostname=hostname, partition=partition)
-        result = result == 0
+
     else:
         write_input(inp, directory=directory)
         result = vasp(directory=directory, cpus=cpus, show_output=show_output, application=application,
-                      hostname=hostname, partition=partition)
+                      hostname=hostname, partition=partition, return_stdout=False)
+
+    result = result == 0
     if result:
         return parse_output(directory=directory)
     else:
