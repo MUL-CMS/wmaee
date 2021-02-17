@@ -2,7 +2,7 @@ import abc
 import re
 import logging
 import tarfile
-import json
+import yaml
 from wmaee.core.common import LoggerMixin, remove_white, get_configuration_directory
 from os.path import isfile, join, isdir, exists
 from os import listdir
@@ -12,7 +12,7 @@ from tempfile import NamedTemporaryFile
 
 from pymatgen.io.vasp import Potcar, PotcarSingle
 
-DEFAULT_CONFIG = 'defaults.json'
+DEFAULT_CONFIG = 'defaults.yaml'
 POTENTIAL_ARCHIVES = {}
 DEFAULT_POTENTIALS = {}
 
@@ -188,7 +188,7 @@ def _make_potential_archives():
     global POTENTIAL_ARCHIVES, DEFAULT_POTENTIALS
     default_potential_config = join(get_configuration_directory(), DEFAULT_CONFIG)
     with open(default_potential_config, 'rb') as default_potential_config_file:
-        default_potentials = json.load(default_potential_config_file)
+        default_potentials = yaml.load(default_potential_config_file, Loader=yaml.FullLoader)
         DEFAULT_POTENTIALS = default_potentials
     functionals = list(default_potentials.keys())
     resources_directory = get_configuration_directory()

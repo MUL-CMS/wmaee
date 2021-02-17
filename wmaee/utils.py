@@ -1,7 +1,7 @@
 from pymatgen.io.ase import AseAtomsAdaptor
 from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, \
     pyiron_to_pymatgen, pymatgen_to_pyiron, Atoms as IronAtoms
-from typing import Any, Collection, Optional, Union
+from typing import Any, Collection, Optional, NoReturn, Callable, Iterable
 from pymatgen import Structure
 from ase import Atoms as AseAtoms
 from typing import Union, Callable, List
