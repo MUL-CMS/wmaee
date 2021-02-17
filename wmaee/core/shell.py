@@ -9,16 +9,14 @@ from wmaee.core.aio import create_standard_streams
 from typing import Union, Optional, Tuple, Callable, NoReturn, Iterable, ByteString, AnyStr, IO, Dict
 
 # create shortcut types
-LineProcessor = Callable[[ByteString, Iterable[asyncio.Event]], NoReturn]
+LineProcessor = Callable[[bytes, Iterable[asyncio.Event]], NoReturn]
 OutputStream = Union[IO, asyncio.StreamWriter]
 InputStream = Union[IO, asyncio.StreamReader]
 OptionalEventLoop = Optional[Union[asyncio.AbstractEventLoop, None]]
 
 # namedtuples for more consize code. Always in order (stdin, stdout, stderr)
-Callbacks = collections.namedtuple("Callback", ("stdin", "stdout", "stderr"), defaults=(None, None, None))
-StreamProtectors = collections.namedtuple("StreamProtectors", ("stdin", "stdout", "stderr"),
-                                          defaults=(True, True, True))
-Forks = collections.namedtuple("Forks", ("stdin", "stdout", "stderr"), defaults=(None, None, None))
+Callbacks = collections.namedtuple("Callback", ("stdin", "stdout", "stderr"), defaults=([], [], []))
+Forks = collections.namedtuple("Forks", ("stdin", "stdout", "stderr"), defaults=([], [], []))
 
 # shortcut for brevity
 PIPE = asyncio.subprocess.PIPE
@@ -27,10 +25,10 @@ START_MARK = "__start__"
 FINISH_MARK = "__finish__"
 
 # helper function creating a regex which matches the start mark of a command for a given uuid
-make_start_pattern = lambda identifier: re.compile(rf"^{START_MARK}\s*(?P<identifier>{identifier})$")
+START_PATTERN = re.compile(rf"^{START_MARK}\s*(?P<identifier>[a-z0-9]{32})$")
 # helper function creating a regex which matches the end mark of a command for a given uuid
-make_finish_pattern = lambda identifier: re.compile(
-    rf"^{FINISH_MARK}\s*(?P<identifier>{identifier})\s*(?P<returncode>\d+)$")
+FINISH_PATTERN = re.compile(
+    rf"^{FINISH_MARK}\s*(?P<identifier>[a-z0-9]{32})\s*(?P<returncode>\d+)$")
 
 
 def make_command_marks() -> Tuple[AnyStr, AnyStr, AnyStr]:
@@ -57,14 +55,13 @@ def wrap_command(command: AnyStr, encoding: Optional[AnyStr] = "utf-8") -> Tuple
 
 class Shell:
 
-    def __init__(self, handle, stdin, stdout, stderr, protect=None, callbacks=None, forks=None):
+    def __init__(self, handle, stdin, stdout, stderr, callbacks=None, forks=None):
         """
         Create a shell object which holds the subprocess handle
         :param handle: (asyncio.subprocess.Process) the internal shell handle
         :param stdin: (input stream) the input stream which is forwarded to handle.stdin
         :param stdout: (output stream) the output stream where handle.stdout is forwarded to
         :param stderr: (output stream) the output stream where handle.stderr is forwarded to
-        :param protect: (StreamProctectors or tuple or bool) define which streams should be protected from closing
         :param callbacks: (Callbacks or tuple of callable) callbacks for the streams in order (in, out err)
         :param forks: (has write method) streams or IO to which the standard streams are foked to (in, out err)
         """
@@ -72,7 +69,6 @@ class Shell:
         self._stdout = stdout
         self._stderr = stderr
         self._stdin = stdin
-        self._protect = protect or StreamProtectors()
         self._forks = forks or Forks()
         self._callbacks = callbacks or Callbacks()
         self.commands = {}
@@ -92,10 +88,6 @@ class Shell:
     @property
     def stdin(self):
         return self._stdin
-
-    @property
-    def protect(self):
-        return self._protect
 
     @property
     def forks(self):
@@ -120,8 +112,7 @@ async def write_message(writer: OutputStream, msg: bytes, flush: Optional[bool] 
         writer.flush()
 
 
-def make_line_processor_command_wrapper(shell: Shell, identifier: bytes,
-                                        encoding: Optional[AnyStr] = "utf-8") -> LineProcessor:
+def make_line_processor_command_wrapper(shell: Shell,  encoding: Optional[AnyStr] = "utf-8") -> LineProcessor:
     """
     Factory function for a line processor which takes care of a function
     :param shell: (Shell) Shell objets to store command execution data, such as e. g. return-codes and timings
@@ -130,28 +121,23 @@ def make_line_processor_command_wrapper(shell: Shell, identifier: bytes,
     :return: (line processor) the processing function
     """
 
-    start_pattern = make_start_pattern(identifier.decode(encoding=encoding))
-    finish_pattern = make_finish_pattern(identifier.decode(encoding=encoding))
-
     def _line_processor(msg, events):
-        skip_line, break_loop, *_ = events
-        # we matcfh the regexes only if {identifier} is present, otherwise it cant be a mark anyway
-        if identifier is not None and identifier in msg:
-            # we assume byte mode -> decode
-            line = msg.decode(encoding=encoding).strip()
-            mstart = start_pattern.match(line)
-            mfinish = finish_pattern.match(line)
-            if mstart:
-                # store the info in the shell when we pass the starting line
-                cmd_id = mstart.groupdict()["identifier"]
-                shell.commands[cmd_id]["started"] = datetime.datetime.now()
-                skip_line.set()
-            elif mfinish:
-                cmd_id = mfinish.groupdict()["identifier"]
-                shell.commands[cmd_id]["finished"] = datetime.datetime.now()
-                shell.commands[cmd_id]["returncode"] = int(mfinish.groupdict()["returncode"])
-                # we do not forward this list but rather exit form here
-                break_loop.set()
+        skip_line, *_ = events
+        # we assume byte mode -> decode
+        line = msg.decode(encoding=encoding).strip()
+        mstart = START_PATTERN.match(line)
+        mfinish = FINISH_PATTERN.match(line)
+        if mstart:
+            # store the info in the shell when we pass the starting line
+            cmd_id = mstart.groupdict()["identifier"]
+            shell.commands[cmd_id]["started"] = datetime.datetime.now()
+            skip_line.set()
+        elif mfinish:
+            cmd_id = mfinish.groupdict()["identifier"]
+            shell.commands[cmd_id]["finished"] = datetime.datetime.now()
+            shell.commands[cmd_id]["returncode"] = int(mfinish.groupdict()["returncode"])
+            # we do not forward this list but rather exit form here
+            skip_line.set()
 
     return _line_processor
 
@@ -170,7 +156,7 @@ def make_line_processor_forker(forks: Iterable[OutputStream], flush: Optional[bo
 
     return _line_processor
 
-
+# TODO: Figure out if we really need this one
 def make_line_processor_callback(callbacks: Iterable[Callable[[bytes], NoReturn]]) -> LineProcessor:
     """
     Factory function for a line processor which calls a callback function whenever a message is received
@@ -250,7 +236,7 @@ async def create_shell_handle(stdin: Optional[Union[InputStream, None]] = None,
     shell_handle = await asyncio.create_subprocess_exec(*shlex.split(shell_cmd), stdout=PIPE, stderr=PIPE, stdin=PIPE,
                                                         loop=loop)
     # warp everything needed into an Shell object
-    return Shell(shell_handle, stdin or sstdin, stdout or sstdout, stderr or sstderr, protect)
+    return Shell(shell_handle, stdin or sstdin, stdout or sstdout, stderr or sstderr)
 
 
 # For brevity we define a ForkType here
@@ -259,7 +245,7 @@ CallbacksType = Union[Tuple[Iterable[Callable[[bytes], NoReturn]], Iterable[Call
     Callable[[bytes], NoReturn]]], Callbacks]
 
 
-def create_io_forwarding_tasks(shell: Shell, identifier: bytes, forks: Optional[Union[ForksType, None]] = None,
+def create_io_forwarding_tasks(shell: Shell, forks: Optional[Union[ForksType, None]] = None,
                                callbacks=None, encoding: Optional[Union[CallbacksType, None]] = "utf-8") -> Dict[
     AnyStr, asyncio.Task]:
     """
@@ -276,10 +262,10 @@ def create_io_forwarding_tasks(shell: Shell, identifier: bytes, forks: Optional[
     # retrieve forks and possibly override it with the args passed in
     stdin_cb, stdout_cb, stderr_cb = shell.callbacks if callbacks is None else callbacks
     stdin_fk, stdout_fk, stderr_fk = shell.forks if forks is None else forks
-
+    print(stdin_fk, stdout_fk, stderr_fk)
     # create a line processor factory
     make_line_processors = lambda forks, cb: [
-        make_line_processor_command_wrapper(shell, identifier, encoding=encoding),
+#        make_line_processor_command_wrapper(shell, encoding=encoding),
         make_line_processor_forker(forks),
         make_line_processor_callback(cb)
     ]
@@ -321,16 +307,12 @@ async def send_command(shell: Shell, command: AnyStr, forks: Optional[Union[Fork
     """
 
     identifier, cmd = wrap_command(command)
-    # tell the shell theat the command is acutally being executed
+    # tell the shell that the command is acutally being executed
     shell.commands[identifier.decode()] = dict(content=command)
     # send it to its stdin
     shell.handle.stdin.write(cmd)
     await shell.handle.stdin.drain()
     # create the I/O pipe coros and wait for one of the to complete (usually stdout). Then cancel the others
-    tasks = create_io_forwarding_tasks(shell, identifier, forks=forks, callbacks=callbacks)
-    done, pending = await asyncio.wait(tasks.values(), return_when=asyncio.FIRST_COMPLETED)
-    for pending_task in pending:
-        pending_task.cancel()
 
 
 async def main(loop: OptionalEventLoop = None, shell_cmd: Optional[AnyStr] = "/bin/bash") -> NoReturn:
@@ -341,7 +323,11 @@ async def main(loop: OptionalEventLoop = None, shell_cmd: Optional[AnyStr] = "/b
     """
     loop = loop or asyncio.get_event_loop()
     shell = await create_shell_handle(shell_cmd=shell_cmd, loop=loop)
-    await send_command(shell, shell_cmd)
+    tasks = create_io_forwarding_tasks(shell, forks=None, callbacks=None)
+    # now we wait for the handle to finish
+    done, pending = await asyncio.wait(list(tasks.values()) + [shell.handle.wait()], return_when=asyncio.FIRST_COMPLETED)
+    # await send_command(shell, shell_cmd)
+
 
 # Create a clause if this script is running as main
 if __name__ == '__main__':
