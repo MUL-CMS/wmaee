@@ -5,7 +5,7 @@ import shlex
 import asyncio
 import datetime
 import collections.abc
-from wmaee.core.aio import create_standard_streams
+from wmaee.core.aio import create_standard_streams, open_unix_connections
 from typing import Union, Optional, Tuple, Callable, NoReturn, Iterable, ByteString, AnyStr, IO, Dict
 
 # create shortcut types
@@ -30,11 +30,14 @@ class Shell:
     def __init__(self, stdin=None, stdout=None, stderr=None, callbacks=None, forks=None, shell_cmd="/bin/bash"):
         """
         Create a shell object which holds the subprocess handle
-        :param handle: (asyncio.subprocess.Process) the internal shell handle
-        :param stdin: (input stream) the input stream which is forwarded to handle.stdin
-        :param stdout: (output stream) the output stream where handle.stdout is forwarded to
-        :param stderr: (output stream) the output stream where handle.stderr is forwarded to
-        :param callbacks: (Callbacks or tuple of callable) callbacks for the streams in order (in, out err)
+        :param stdin: the input stream which is forwarded to handle.stdin
+        :type stdin: InputStream
+        :param stdout: the output stream where handle.stdout is forwarded to
+        :type stdout: OutputStream
+        :param stderr: the output stream where handle.stderr is forwarded to
+        :type stderr: OutputStream
+        :param callbacks: callbacks for the streams in order (in, out err)
+        :type callbacks: Callbacks
         """
         self._handle = None
         self._cmd = shell_cmd
@@ -105,9 +108,12 @@ class Shell:
 async def write_message(writer: OutputStream, msg: bytes, flush: Optional[bool] = False) -> NoReturn:
     """
     Helper method which can write to IO type ans Stream typed writer objects
-    :param writer: (IO or output stream) where {msg} is written to
-    :param msg: (bytes) the data
-    :param flush: (bool) wether to flush after each writer or not (default: False)
+    :param writer: where {msg} is written to
+    :type writer: OutputStream
+    :param msg: the data
+    :type msg: bytes
+    :param flush: wether to flush after each writer or not (default is False)
+    :type flush: bool
     """
     writer.write(msg)
     if hasattr(writer, "drain"):
@@ -120,9 +126,12 @@ def make_callback_forker(get_forks: Callable[[], Iterable[OutputStream]],
                          flush: Optional[bool] = False) -> LineProcessor:
     """
     Factory function for a line processor which forks an incoming message to a list of output streams
-    :param forks: (callable -> iterable output stream) output writer tuple where the content of the reader will be forked to
-    :param flush: (bool) wether to flush the writer after each message (default: False)
-    :return: (line processor) the processing function
+    :param get_forks: output writer getter function where the content of the reader will be forked to
+    :type get_forks: Callable
+    :param flush: wether to flush the writer after each message (default is False)
+    :type flush: bool
+    :return: the processing function
+    :rtype: LineProcessor
     """
 
     async def _line_processor(msg):
@@ -136,8 +145,10 @@ def make_callback_forker(get_forks: Callable[[], Iterable[OutputStream]],
 def make_callback_callbacks(get_callbacks: Callable[[], Iterable[Callable[[bytes], NoReturn]]]) -> LineProcessor:
     """
     Factory function for a line processor which calls a callback function whenever a message is received
-    :param callback: (iterable of callable) logging callbacks execute for each piped line
-    :return: (line processor) the processing function
+    :param get_callbacks: logging callbacks execute for each piped line
+    :type get_callbacks: Callable
+    :return: the processing function
+    :rtype: LineProcessor
     """
 
     def _line_processor(msg):
@@ -149,14 +160,18 @@ def make_callback_callbacks(get_callbacks: Callable[[], Iterable[Callable[[bytes
 
 async def processor_pipe(reader: InputStream, writer: OutputStream,
                          callbacks: Optional[Union[Iterable[LineProcessor], None]] = None,
-                         flush: Optional[bool] = False):
+                         flush: Optional[bool] = False) -> NoReturn:
     """
     a pipe which intercepts and looks at the data, to determine when a shell command was started and to determine its
     end time respectively
-    :param reader: (input stream) the input reader
-    :param writer: (output stream) output end of the pipe
-    :param processors: (iterable of line processors) line processor functions (default=None)
-    :param flush: (bool) wether to flush the writer after each message (default: False)
+    :param reader: the input reader
+    :type reader: InputStream
+    :param writer: output end of the pipe
+    :type writer: OutputStream
+    :param callbacks: line processor functions (default is None)
+    :type callbacks: Iterable[LineProcessor]
+    :param flush: wether to flush the writer after each message (default is False)
+    :type flush: bool
     """
     # create the regex patterns which will mach, start and end of the executed command
     processors = callbacks or []  # loop over empty list
@@ -184,12 +199,18 @@ async def create_shell_handle(stdin: Optional[Union[InputStream, None]] = None,
     asyncio.subprocess.Process, InputStream, OutputStream, OutputStream]:
     """
     Creates an asyncio subprocess handle and connects it with the streams specified in the arguments
-    :param stdin: (input stream) stdin stream
-    :param stdout: (output stream) stdout stream
-    :param stderr: (output stream) stderr stream
-    :param shell_cmd: (str) the command used to open the handle (default: /bin/bash)
-    :param loop: (asyncio.EventLoop) the asnycio.EventLoop (default: None)
-    :return: (Shell) the shell object which wraps streams, forks and callbacks
+    :param stdin: stdin stream
+    :type stdin: InputStream
+    :param stdout: stdout stream
+    :type stdout: OutputStream
+    :param stderr: stderr stream
+    :type stderr: OutputStream
+    :param shell_cmd: the command used to open the handle (default is /bin/bash)
+    :type shell_cmd: str
+    :param loop: the asnycio.EventLoop (default is None)
+    :type loop: asyncio.AbstractEventLoop
+    :return: the shell object which wraps streams, forks and callbacks
+    :rtype: Shell
     """
     loop = asyncio.get_event_loop() if loop is None else loop
     # determine which streams need protection
@@ -212,10 +233,12 @@ CallbacksType = Union[Tuple[Iterable[Callable[[bytes], NoReturn]], Iterable[Call
 def create_io_forwarding_tasks(shell: Shell) -> Dict[
     AnyStr, asyncio.Task]:
     """
-    We follow the stategy here that pipes are only open as long as commands are running. Thus when a command is to be
+    We follow the strategy here that pipes are only open as long as commands are running. Thus when a command is to be
     executed we create the pipe tasks
-    :param shell: (Shell) the shell object encapsulating the pipe streams
-    :return: (dict of str and asnycio.Task) the pipe coros
+    :param shell: the shell object encapsulating the pipe streams
+    :type shell: Shell
+    :return: the pipe coros
+    :rtype: dict
     """
 
     # retrieve forks and possibly override it with the args passed in
@@ -253,20 +276,28 @@ def create_io_forwarding_tasks(shell: Shell) -> Dict[
     return forwarding_tasks
 
 
-async def main(loop: OptionalEventLoop = None, shell_cmd: Optional[AnyStr] = "/bin/bash") -> NoReturn:
+async def main_std(shell_cmd: Optional[AnyStr] = "/bin/bash") -> NoReturn:
     """
-    Runs a
-    :param loop: (asyncio.EventLoop) the event loop
-    :param shell_cmd: (str) the command used to open the handle (default: /bin/bash)
+    Runs a simpple shell. The standard streams are connected to the shell handle.
+    :param loop: the event loop
+    :type loop: asyncio.AbstractEventLoop
+    :param shell_cmd: the command used to open the handle (default is /bin/bash)
+    :type shell_cmd: str
     """
-    loop = loop or asyncio.get_event_loop()
     async with Shell(shell_cmd=shell_cmd) as shell:
-        shell.handle.stdin.write(b"ls -lsfag\n")
-        await shell.handle.stdin.drain()
         await shell.handle.wait()
-    # await send_command(shell, shell_cmd)
 
 
-# Create a clause if this script is running as main
+async def main_unix(sock_in: str, sock_out: str, sock_err: str, shell_cmd: Optional[AnyStr] = "/bin/bash") -> NoReturn:
+    streams = await open_unix_connections(sock_in, sock_out, sock_err)
+    async with Shell(*streams, shell_cmd=shell_cmd) as shell:
+        await shell.handle.wait()
+
 if __name__ == '__main__':
-    asyncio.get_event_loop().run_until_complete(main())
+    _, mode,*args = sys.argv
+    if mode == "std":
+        asyncio.get_event_loop().run_until_complete(main_std(*args))
+    elif mode == "unix":
+        asyncio.get_event_loop().run_until_complete(main_unix(*args))
+    else:
+        raise ValueError(f"Unknown mode \"{mode}\"")
