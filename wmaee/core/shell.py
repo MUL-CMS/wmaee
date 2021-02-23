@@ -1,9 +1,12 @@
 import re
+import os
 import sys
 import uuid
 import shlex
 import asyncio
 import datetime
+import abc
+import functools
 import collections.abc
 from wmaee.core.aio import create_standard_streams, open_unix_connections
 from typing import Union, Optional, Tuple, Callable, NoReturn, Iterable, ByteString, AnyStr, IO, Dict
@@ -24,6 +27,154 @@ PIPE = asyncio.subprocess.PIPE
 START_MARK = "__start__"
 FINISH_MARK = "__finish__"
 
+
+def void(*args, **kwargs):
+    pass
+
+
+async def pipe(reader, writer, *args, block=2048, close=False, disconnect_cb=None, **kwargs):
+
+    handle_disconnect = disconnect_cb or void
+    try:
+        while not reader.at_eof():
+            msg = await reader.read(block)
+            writer.write(msg)
+            await writer.drain()
+        handle_disconnect(*args)
+    except:
+        handle_disconnect(*args)
+    finally:
+        if close: writer.close()
+
+
+class ShellServer(abc.ABC):
+
+    def __init__(self, stdin=None, stdout=None, stderr=None, loop=None):
+        self._stdout = stdout
+        self._stderr = stderr
+        self._stdin = stdin
+        self._loop = loop or asyncio.get_event_loop()
+        self._connections = (
+        asyncio.Event(loop=self._loop), asyncio.Event(loop=self._loop), asyncio.Event(loop=self._loop))
+        self._pipes = (None, None, None)
+        self._closed = asyncio.Event(loop=loop)
+
+    def set_connection(self, value, fd):
+        if value:
+            self._connections[fd].set()
+        else:
+            self._connections[fd].clear()
+
+        print(f"set_connection: {tuple(map(lambda e: e.is_set(), self._connections))} - {self.active}")
+
+    def set_pipe(self, value, fd):
+        o = list(self._pipes)
+        o[fd] = value
+        self._pipes = tuple(o)
+
+    def handle_stdin_disconnected(self, *args, **kwargs):
+        self.set_connection(False, 0)
+
+    def handle_stdout_disconnected(self, *args, **kwargs):
+        self.set_connection(False, 1)
+        if not self.active: self._close()
+
+    def handle_stderr_disconnected(self, *args, **kwargs):
+        self.set_connection(False, 2)
+        if not self.active: self._close()
+
+    @property
+    def active(self):
+        return self._connections[1].is_set() or self._connections[2].is_set()
+
+    def _close_pipes(self):
+        for coro in self._pipes:
+            if not coro:
+                continue
+            else:
+                coro.cancel()
+
+    async def handle_stdin_connected(self, reader, writer):
+        pipe_task = self._loop.create_task(
+            pipe(self._stdin, writer, disconnect_cb=self.handle_stdin_disconnected, fd=0))
+        self.set_pipe(pipe_task, 0)
+        self.set_connection(True, 0)
+
+    async def handle_stdout_connected(self, reader, writer):
+        pipe_task = self._loop.create_task(
+            pipe(reader, self._stdout, disconnect_cb=self.handle_stdout_disconnected, fd=1))
+        self.set_pipe(pipe_task, 1)
+        self.set_connection(True, 1)
+
+    async def handle_stderr_connected(self, reader, writer):
+        pipe_task = self._loop.create_task(
+            pipe(reader, self._stdout, disconnect_cb=self.handle_stderr_disconnected, fd=2))
+        self.set_pipe(pipe_task, 2)
+        self.set_connection(True, 2)
+
+    @abc.abstractmethod
+    async def start(self):
+        raise NotImplemented
+
+    @abc.abstractmethod
+    async def shutdown(self):
+        raise NotImplemented
+
+    async def serve(self):
+        await self.start()
+        print("Waiting for client to connect: ...")
+        for connection in self._connections:
+            await connection.wait()
+        return self
+
+    async def __aenter__(self):
+        return await self.serve()
+
+    def _close(self):
+        if self._closed.set(): return
+        self._close_pipes()  # shut down the forwarding tasks
+        self._loop.run_until_complete(self.shutdown()) # call user shutdown function
+        self._closed.set()  # set the closed flag
+        print(self._closed.is_set())
+
+    async def close(self):
+        return await self._closed.wait()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+
+class StandardUnixShellServer(ShellServer):
+
+    def __init__(self, sock_in, sock_out, sock_err, loop=None):
+        self._sock_in = sock_in
+        self._sock_out = sock_out
+        self._sock_err = sock_err
+        self._servers = (None, None, None)
+        super().__init__(sys.stdin, sys.stderr, sys.stdout, loop=loop)
+
+    async def start(self):
+        if os.path.exists(self._sock_in): os.unlink(self._sock_in)
+        if os.path.exists(self._sock_out): os.unlink(self._sock_out)
+        if os.path.exists(self._sock_err): os.unlink(self._sock_err)
+        self._stdin, self._stdout, self._stderr = await create_standard_streams(self._stdin, self._stdout, self._stderr,
+                                                                                loop=self._loop)
+
+        srv_stdin = await asyncio.start_unix_server(self.handle_stdin_connected, path=self._sock_in)
+        srv_stdout = await asyncio.start_unix_server(self.handle_stdout_connected, path=self._sock_out)
+        srv_stderr = await asyncio.start_unix_server(self.handle_stderr_connected, path=self._sock_err)
+        self._servers = (srv_stdin, srv_stdout, srv_stderr)
+
+    async def shutdown(self):
+        for server in self._servers:
+            if server: server.close()
+            await server.wait_closed()
+
+    def run(self):
+        async def _runner():
+            await self.serve()
+            await self.close()
+        asyncio.get_event_loop().run_until_complete(_runner())
 
 class Shell:
 
@@ -141,7 +292,6 @@ def make_callback_forker(get_forks: Callable[[], Iterable[OutputStream]],
     return _line_processor
 
 
-# TODO: Figure out if we really need this one
 def make_callback_callbacks(get_callbacks: Callable[[], Iterable[Callable[[bytes], NoReturn]]]) -> LineProcessor:
     """
     Factory function for a line processor which calls a callback function whenever a message is received
@@ -293,11 +443,14 @@ async def main_unix(sock_in: str, sock_out: str, sock_err: str, shell_cmd: Optio
     async with Shell(*streams, shell_cmd=shell_cmd) as shell:
         await shell.handle.wait()
 
+
 if __name__ == '__main__':
-    _, mode,*args = sys.argv
+    _, mode, *args = sys.argv
     if mode == "std":
         asyncio.get_event_loop().run_until_complete(main_std(*args))
-    elif mode == "unix":
+    elif mode == "unix-backend":
         asyncio.get_event_loop().run_until_complete(main_unix(*args))
+    elif mode == "unix-frontend":
+        StandardUnixShellServer(*args).run()
     else:
         raise ValueError(f"Unknown mode \"{mode}\"")
