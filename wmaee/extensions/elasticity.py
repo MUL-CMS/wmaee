@@ -13,6 +13,7 @@ def apply_strain(structure, strain, div_two=True):
     if isinstance(structure, Atoms):
         result = structure.copy()
         result.cell = np.dot(deformation_matrix, result.cell)
+        result.set_scaled_positions(structure.get_scaled_positions())
     elif isinstance(structure, Structure):
         result = structure.copy()
         matrix = result.lattice.matrix
