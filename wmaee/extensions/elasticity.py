@@ -202,4 +202,12 @@ def project_hexagonal(cij, pretty=True):
     projected_cij[2, 1] = projected_cij[2, 0]
     projected_cij[0, 2] = projected_cij[2, 0]
     projected_cij[1, 2] = projected_cij[2, 0]
+    # convert back,Moakher & Norris, Eq. 7
+    for j in range(3, 6):
+        for i in range(3):
+            projected_cij[i, j] /= np.sqrt(2)
+            projected_cij[j, i] /= np.sqrt(2)
+        for i in range(3, 6):
+            projected_cij[i, j] /= 2
+
     return Matrix(projected_cij) if pretty else projected_cij
