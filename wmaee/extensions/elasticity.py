@@ -2,6 +2,7 @@ import numpy as np
 from ase import Atoms
 from pymatgen import Lattice, Structure
 from sympy import Matrix
+from itertools import product
 
 def apply_strain(structure, strain, div_two=True):
     strain = np.array(strain)
@@ -23,18 +24,58 @@ def apply_strain(structure, strain, div_two=True):
         raise TypeError()
     return result
 
+def index_from_voigt(i):
+    """
+    Converts Voigt (1 index) and tensorial (2 indices) notation.
+    :param i: (int) index in Voigt's notation (0..5)
+    :return: (int, int) pair of indices (0..2)
+    """
+    if i == 0:
+        return (0, 0)
+    elif i == 1:
+        return (1, 1)
+    elif i == 2:
+        return (2, 2)
+    elif i == 3:
+        return (1, 2)
+    elif i == 4:
+        return (0, 2)
+    elif i == 5:
+        return (0, 1)
+    else:
+        raise ValueError('Unknown value of index')  
+
 def from_voigt(m, div_two=True):
-    e = m.copy()
-    if div_two:
-        e[3] /= 2.0
-        e[4] /= 2.0
-        e[5] /= 2.0
-    m = np.array([
-        [e[0], e[5], e[4]],
-        [e[5], e[1], e[3]],
-        [e[4], e[3], e[2]]
-    ])
-    return m
+    if m.shape == (6, ):
+        # 2nd rank tensor: vector 6x1 -> matrix 3x3
+        e = m.copy()
+        if div_two:
+            e[3] /= 2.0
+            e[4] /= 2.0
+            e[5] /= 2.0
+        m = np.array([
+            [e[0], e[5], e[4]],
+            [e[5], e[1], e[3]],
+            [e[4], e[3], e[2]]
+        ])
+        return m
+    elif m.shape == (6, 6):
+        # 4nd rank tensor: matrix 6x6 -> matrix 3x3x3x3
+        fact = np.ones(6)
+        if div_two:
+           for i in np.arange(3, 6):
+               fact[i] = 0.5
+        e = np.zeros(81).reshape((3, 3, 3 ,3))
+        for i, j in product(np.arange(6), np.arange(6)):
+            a, b = index_from_voigt(i)
+            c, d = index_from_voigt(j)
+            e[a, b, c, d] = m[i, j]*fact[i]*fact[j]
+            e[a, b, d, c] = m[i, j]*fact[i]*fact[j]
+            e[b, a, c, d] = m[i, j]*fact[i]*fact[j]
+            e[b, a, d, c] = m[i, j]*fact[i]*fact[j]        
+        return e
+    else:
+        raise ValueError('Unknown shape of the input data')    
 
 def to_voigt(m, times_two=True):
     if m.shape != (3, 3):
