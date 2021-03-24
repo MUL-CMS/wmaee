@@ -13,6 +13,7 @@ def apply_strain(structure, strain, div_two=True):
     if isinstance(structure, Atoms):
         result = structure.copy()
         result.cell = np.dot(deformation_matrix, result.cell)
+        result.set_scaled_positions(structure.get_scaled_positions())
     elif isinstance(structure, Structure):
         result = structure.copy()
         matrix = result.lattice.matrix
@@ -73,4 +74,38 @@ def project_cubic(cij, pretty=True):
     projected_cij[0, 1] = projected_cij[1, 0]
     projected_cij[0, 2] = projected_cij[1, 0]
     projected_cij[1, 2] = projected_cij[1, 0]
+    return Matrix(projected_cij) if pretty else projected_cij
+
+def project_hexagonal(cij, pretty=True):
+    """
+    Computes Cij tensor projected to hexagonal symmetry
+    :param cij: (arraylike) of shape (6,6) the raw elasticity tensor
+    :param pretty: (bool) if the Cij tensor should be wrapped into a sympy.Matrix for nicer view in Jupyter notebooks
+    :return: (numpy.ndarray or sympy.Matrix) the projected Cij tensor
+    """ 
+    # convert from Cij to cij_hat, Moakher & Norris, Eq. 7
+    cij_hat = np.array(cij).copy()
+    for j in np.arange(3, 6):
+        for i in np.arange(3):
+            cij_hat[i, j] *= np.sqrt(2)
+            cij_hat[j, i] *= np.sqrt(2)
+        for i in np.arange(3, 6):
+            cij_hat[i, j] *= 2
+    # projecting on hexagonal symmetry, Moakher & Norris, Eq. A11a, A11b
+    c11st = (3*cij_hat[0,0]+3*cij_hat[1,1]+2*cij_hat[0,1]+2*cij_hat[5,5])/8.
+    c66st = (cij_hat[0,0]+cij_hat[1,1]-2*cij_hat[0,1]+2*cij_hat[5,5])/4.
+    # Moakher & Norris, Eq. A15         
+    projected_cij = np.zeros((6, 6))
+    projected_cij[0, 0] = np.around(c11st, 2)
+    projected_cij[1, 1] = projected_cij[0, 0]
+    projected_cij[2, 2] = np.around(cij_hat[2, 2], 2)
+    projected_cij[3, 3] = np.around(np.mean([cij_hat[3, 3], cij_hat[4, 4]]), 2)
+    projected_cij[4, 4] = projected_cij[3, 3]
+    projected_cij[5, 5] = np.around(c66st, 2)
+    projected_cij[1, 0] = np.around(c11st-c66st, 2)
+    projected_cij[0, 1] = projected_cij[1, 0]
+    projected_cij[2, 0] = np.around(np.mean([cij_hat[2, 0], cij_hat[2, 1]]), 2)
+    projected_cij[2, 1] = projected_cij[2, 0]
+    projected_cij[0, 2] = projected_cij[2, 0]
+    projected_cij[1, 2] = projected_cij[2, 0]
     return Matrix(projected_cij) if pretty else projected_cij
