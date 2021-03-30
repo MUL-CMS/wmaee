@@ -2,6 +2,7 @@ import numpy as np
 from ase import Atoms
 from pymatgen import Lattice, Structure
 from sympy import Matrix
+from itertools import product
 
 def apply_strain(structure, strain, div_two=True):
     strain = np.array(strain)
@@ -23,35 +24,128 @@ def apply_strain(structure, strain, div_two=True):
         raise TypeError()
     return result
 
+def index_from_voigt(i):
+    """
+    Converts Voigt's (1 index) and tensorial (2 indices) notation
+    :param i: (int) index in Voigt's notation (0..5)
+    :return: (int, int) pair of indices (0..2)
+    """
+    if i == 0:
+        return (0, 0)
+    elif i == 1:
+        return (1, 1)
+    elif i == 2:
+        return (2, 2)
+    elif i == 3:
+        return (1, 2)
+    elif i == 4:
+        return (0, 2)
+    elif i == 5:
+        return (0, 1)
+    else:
+        raise ValueError('Unknown value of index')
+
+def index_to_voigt(i, j):
+    """
+    Converts tensorial (2 indices) to Voigt's (1 index) notation
+    :param i: (int) index in tensorial notation (0..2)
+    :param j: (int) index in tensorial notation (0..2)
+    :return: (int) index in Voigt's notation (0..6)
+    """
+    if (i, j) in product(np.arange(3), np.arange(3)):
+        if i == j:
+            return i
+        elif i+j == 3:
+            return 4
+        elif i+j == 2:
+            return 5
+        elif i+j == 3:
+            return 6
+    else:
+        raise ValueError('Unknown value of indeces') 
+
+def transform_tensor(t, A, fact_two=False):
+    """
+    Transforms tensor according to a given transformation matrix
+    :param t: (numpy.ndarray) tensor to be transformed
+    :param A: (numpy.ndarray) transformation matrix
+    :param fact_twp: (bool) whether to apply factors 2, 4, ... during conversion to/from Voigt's notation            
+    :return: (numpy.ndarray) transformed matrix
+    """
+    if t.shape in [(6, 6), (3, 3, 3, 3)]:
+        if t.shape == (6, 6):
+            voigt = True
+            t = from_voigt(t, fact_two)
+        e = np.zeros(81).reshape((3, 3, 3 ,3))
+        for i, j, k, l in product(np.arange(3), np.arange(3), np.arange(3), np.arange(3)):
+            for a, b, c, d in product(np.arange(3), np.arange(3), np.arange(3), np.arange(3)):
+                e[i, j, k, l] += np.around(A[i, a]*A[j, b]*A[k, c]*A[l, d]*t[a, b, c, d], 2)
+        if voigt:
+            e = to_voigt(e, fact_two)
+        return e
+    else:
+        raise ValueError('Unknown shape of the input tensor.')
+
 def from_voigt(m, div_two=True):
-    e = m.copy()
-    if div_two:
-        e[3] /= 2.0
-        e[4] /= 2.0
-        e[5] /= 2.0
-    m = np.array([
-        [e[0], e[5], e[4]],
-        [e[5], e[1], e[3]],
-        [e[4], e[3], e[2]]
-    ])
-    return m
+    if m.shape == (6, ):
+        # 2nd rank tensor: vector 6x1 -> matrix 3x3
+        e = m.copy()
+        if div_two:
+            e[3] /= 2.0
+            e[4] /= 2.0
+            e[5] /= 2.0
+        m = np.array([
+            [e[0], e[5], e[4]],
+            [e[5], e[1], e[3]],
+            [e[4], e[3], e[2]]
+        ])
+        return m
+    elif m.shape == (6, 6):
+        # 4nd rank tensor: matrix 6x6 -> matrix 3x3x3x3
+        fact = np.ones(6)
+        if div_two:
+           for i in np.arange(3, 6):
+               fact[i] = 0.5
+        e = np.zeros(81).reshape((3, 3, 3 ,3))
+        for i, j in product(np.arange(6), np.arange(6)):
+            a, b = index_from_voigt(i)
+            c, d = index_from_voigt(j)
+            e[a, b, c, d] = m[i, j]*fact[i]*fact[j]
+            e[a, b, d, c] = m[i, j]*fact[i]*fact[j]
+            e[b, a, c, d] = m[i, j]*fact[i]*fact[j]
+            e[b, a, d, c] = m[i, j]*fact[i]*fact[j]        
+        return e
+    else:
+        raise ValueError('Unknown shape of the input data')    
 
 def to_voigt(m, times_two=True):
-    if m.shape != (3, 3):
+    if m.shape == (3, 3):
+        voigt = np.array([
+            m[0, 0],
+            m[1, 1],
+            m[2, 2],
+            (m[2, 1] + m[1, 2]) / 2.0,
+            (m[2, 0] + m[0, 2]) / 2.0,
+            (m[1, 0] + m[0, 1]) / 2.0
+        ])
+        if times_two:
+            voigt[3] *= 2.0
+            voigt[4] *= 2.0
+            voigt[5] *= 2.0
+        return voigt
+    if m.shape == (3, 3, 3, 3):
+        fact = np.ones(6)
+        if times_two:
+           for i in np.arange(3, 6):
+               fact[i] = 2.0
+        voigt = np.zeros(36).reshape((6, 6))
+        for i, j in product(np.arange(6), np.arange(6)):
+            a, b = index_from_voigt(i)
+            c, d = index_from_voigt(j)
+            voigt[i, j] = m[a, b, c, d]*fact[i]*fact[j] 
+        return voigt
+    else:
         raise ValueError('A stress matrix must be of shape (3,3)')
-    voigt = np.array([
-        m[0, 0],
-        m[1, 1],
-        m[2, 2],
-        (m[2, 1] + m[1, 2]) / 2.0,
-        (m[2, 0] + m[0, 2]) / 2.0,
-        (m[1, 0] + m[0, 1]) / 2.0
-    ])
-    if times_two:
-        voigt[3] *= 2.0
-        voigt[4] *= 2.0
-        voigt[5] *= 2.0
-    return voigt
 
 def project_cubic(cij, pretty=True):
     """
@@ -108,4 +202,12 @@ def project_hexagonal(cij, pretty=True):
     projected_cij[2, 1] = projected_cij[2, 0]
     projected_cij[0, 2] = projected_cij[2, 0]
     projected_cij[1, 2] = projected_cij[2, 0]
+    # convert back,Moakher & Norris, Eq. 7
+    for j in range(3, 6):
+        for i in range(3):
+            projected_cij[i, j] /= np.sqrt(2)
+            projected_cij[j, i] /= np.sqrt(2)
+        for i in range(3, 6):
+            projected_cij[i, j] /= 2
+
     return Matrix(projected_cij) if pretty else projected_cij
