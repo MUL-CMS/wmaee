@@ -3,7 +3,7 @@ from wmaee.utils import to_pyiron
 from wmaee.core.types import *
 from ase import Atoms as AseAtoms
 
-from pyiron.base.settings.generic import Settings
+from pyiron_base.settings.generic import Settings
 from pyiron.project import Project
 from pymatgen import Structure, Lattice
 from pandas import DataFrame

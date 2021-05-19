@@ -17,6 +17,7 @@ def rdf(struct, rmin=1, rmax=10, nbins=90):
     r = [0.5*(bin_edges[i+1]+bin_edges[i]) for i in range(len(bin_edges)-1)]
     dr = [(bin_edges[i+1]+bin_edges[i]) for i in range(len(bin_edges)-1)]
 
+    sc = [int(np.ceil(rmax/length)) for length in struct.lattice.abc]
     struct.make_supercell(sc)
     dists = struct.distance_matrix.reshape(-1)
     hist, _ = np.histogram(dists, bins=bin_edges)
