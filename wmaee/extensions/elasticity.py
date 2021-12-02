@@ -4,6 +4,25 @@ from pymatgen import Lattice, Structure
 from sympy import Matrix
 from itertools import product
 
+def get_ULICS(max_eps=1.5e-2):
+    """
+    Returns ULICS (universal linear-independent cou-pling strains) used
+    for deformations in the stress-strain method.
+    For details see doi:10.1016/j.cpc.2009.11.017.
+    :param max_eps: (float) magnitide of the stress (largest component
+        in the Voigt's notation). Defaults to 1.5e-2.
+    :return: np.array 6x6 matrix of ULICS
+    """
+    ULICS = max_eps/6*np.array([
+        [1, -2, 3, -4, 5, -6],
+        [2, 1, -5, -6, 4, 3],
+        [3, 4, -1, 5, 6, -2],
+        [4, -3 ,6, 1, -2, 5],
+        [5, 6, 2, -3, -1, -4],
+        [6, -5, -4, 2, -3, 1]
+        ])
+    return ULICS
+
 def apply_strain(structure, strain, div_two=True):
     strain = np.array(strain)
     # try to convert the vector
