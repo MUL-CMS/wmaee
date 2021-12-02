@@ -24,6 +24,20 @@ def get_ULICS(max_eps=1.5e-2):
     return ULICS
 
 def apply_strain(structure, strain, div_two=True):
+    """Applies strain to a structure
+
+    :param structure: initial structure
+    :type structure: pymatgen.core.Structure or ase.Atoms
+    :param strain: strain to be applied
+    :type strain: np.array
+    :param div_two: whether or not apply factor of 2 when converting from
+        Voigt's notation to tensorial 3x3 strain.
+        Defaults to True
+    :type div_two: bool, optional
+    :raises TypeError: Unknown type of structure
+    :return: deformed structure
+    :rtype: pmatgen.core.Structure or ase.Atoms (same as :structure:)
+    """
     strain = np.array(strain)
     # try to convert the vector
     if strain.shape != (3, 3):

@@ -1,3 +1,7 @@
+"""
+Convenient functions for energy-volume calculations for the WMaE exercises.
+"""
+
 import os
 import numpy as np
 from wmaee.core.common import tqdm, working_directory as folder
