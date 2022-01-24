@@ -358,6 +358,7 @@ def _parse_directory(d : working_directory, raise_exc = True, **kwargs) -> VASPO
     Parses a VASP calculation directory
     :param d: (working_directory)
     :param raise_exc: (bool)
+    :kwargs: arguments to be passed to pymatgen's Vasprun constructor
     :return: (VASPOutput)
     """
     with d:
@@ -375,6 +376,7 @@ def parse_output(directory=None, raise_exc=True, **kwargs):
     """
     Parses the output from VASP. Searches for 'vasprun.xml' file
     :param directory: (str or working_directory) the directory where the output files are located (default: None)
+    :kwargs: arguments to be passed to pymatgen's Vasprun constructor
     :return: (VASPOutput) the VASPOutput object
     """
     if directory is None:
