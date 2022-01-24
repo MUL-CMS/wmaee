@@ -5,7 +5,7 @@ def BM_EoS(V, E0, V0, B0, B0p):
     """Definition of Birch-Murnaghan EoS
 
     :param V: volume at which we want energy
-    :type V: float
+    :type V: float or np.array
     :param E0: equilibrium energy
     :type E0: float
     :param V0: equilibrium volume
@@ -14,8 +14,8 @@ def BM_EoS(V, E0, V0, B0, B0p):
     :type B0: float
     :param B0p: pressure derivative of bulk modulus
     :type B0p: float
-    :return: energy at volume V
-    :rtype: float
+    :return: energy at volume(s) V
+    :rtype: float or np.array
     """
     return E0 + 9*V0*B0/16 * (((V0/V)**(2/3)-1)**3 * B0p + ((V0/V)**(2/3)-1)**2 * (6-4*(V0/V)**(2/3)))
 
