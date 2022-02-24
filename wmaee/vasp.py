@@ -353,35 +353,37 @@ def _parse_archive(a : str, raise_exc: Optional[bool] = True) -> Union[VASPOutpu
     return out_data[0] if len(out_data) == 1 else out_data
 
 
-def _parse_directory(d : working_directory, raise_exc = True) -> VASPOutput:
+def _parse_directory(d : working_directory, raise_exc = True, **kwargs) -> VASPOutput:
     """
     Parses a VASP calculation directory
     :param d: (working_directory)
     :param raise_exc: (bool)
+    :kwargs: arguments to be passed to pymatgen's Vasprun constructor
     :return: (VASPOutput)
     """
     with d:
         if not exists('vasprun.xml'):
             raise FileNotFoundError('Could not find VASP output file "vasprun.xml"')
         try:
-            vasprun = Vasprun('vasprun.xml')
+            vasprun = Vasprun('vasprun.xml', **kwargs)
         except Exception:
             if raise_exc:
                 raise
         return VASPOutput.create(vasprun)
 
 
-def parse_output(directory=None, raise_exc=True):
+def parse_output(directory=None, raise_exc=True, **kwargs):
     """
     Parses the output from VASP. Searches for 'vasprun.xml' file
     :param directory: (str or working_directory) the directory where the output files are located (default: None)
+    :kwargs: arguments to be passed to pymatgen's Vasprun constructor
     :return: (VASPOutput) the VASPOutput object
     """
     if directory is None:
         directory = working_directory(getcwd())
 
     if isinstance(directory, working_directory):
-        return _parse_directory(directory, raise_exc=raise_exc)
+        return _parse_directory(directory, raise_exc=raise_exc, **kwargs)
     elif isinstance(directory, str):
         dirs = glob(directory)
         directories = [d for d in dirs if isdir(d)]
@@ -389,9 +391,9 @@ def parse_output(directory=None, raise_exc=True):
 
         data = []
         for d in directories:
-            data.append((d, _parse_directory(working_directory(d), raise_exc=raise_exc)))
+            data.append((d, _parse_directory(working_directory(d), raise_exc=raise_exc, **kwargs)))
         for f in files:
-            data.append((f, _parse_archive(f, raise_exc=raise_exc)))
+            data.append((f, _parse_archive(f, raise_exc=raise_exc, **kwargs)))
         return data
 
 
