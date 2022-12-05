@@ -10,5 +10,3 @@ To merge branch `david` into `wmaee2`:
 3. `git push`: sync local changes with the server
 4. `git checkout david`: switch back to `david` for further developments
 5. `git rebase wmaee2`: sync branch `david` with the latest `wmaee2` content
-
-`git push --set-upstream origin wmaee2
