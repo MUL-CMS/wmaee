@@ -10,6 +10,8 @@ import warnings
 
 class EqosBirchMurnaghan:
 
+    # __init__ function creates an Object from the class EqosBirchMurnaghan
+    # and initializes the object's attributes
     def __init__(self, volumes: np.ndarray, energies: np.ndarray, initial_value: Sequence = None) -> None:
         self.volumes = volumes
         self.energies = energies
@@ -17,18 +19,24 @@ class EqosBirchMurnaghan:
         self.initial_value = initial_value
 
         if self.initial_value is None:
-            emin = np.min(self.energies)
+            emin = np.min(self.energies)  # guessing value for energy minimum
+            # guessing value for volume minimum
             V0 = self.volumes[np.argmin(self.energies)]
+            # guessing value for bulk modulus = 0.01
             self.initial_value = (V0, 0.01, 0.1, emin)
+            # guessing value for pressure derivative of bulk modulus = 0.1
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            # p_out is the variable, which stores the fitted parameters in the order V0, K0, Kp, and E0
+            # pcov indicates the qualtiy of the fit
             p_out, pcov = opt.curve_fit(self.func, self.volumes, self.energies,
                                         jac=self.jac,
                                         p0=self.initial_value,
                                         xtol=1e-10,
                                         maxfev=5000)
 
+        # Extracts the equilibrium properties of the fit from p_out:
         self.V0 = p_out[0]
         self.K0 = p_out[1]
         self.Kp = p_out[2]
@@ -38,6 +46,7 @@ class EqosBirchMurnaghan:
         self.pressure = np.vectorize(self._pressure)
         self.bulk_modulus = np.vectorize(self._bulkmodulus)
 
+    # Defines Birch-Murnaghan EOS function
     def func(self, V, V0, K0, Kp, E0):
         eta = (V0 / V) ** (2.0 / 3.0)
         E = E0 + 9.0 * K0 * V0 / 16.0 * (eta - 1.0) ** 2 \
@@ -61,6 +70,7 @@ class EqosBirchMurnaghan:
 
         return np.stack((dfuncdV0, dfuncdK0, dfuncdKp, dfuncdE0), axis=-1)
 
+    # Calculates the bulk modulus
     def _bulkmodulus(self, volume):
         V = volume
         V0 = self.V0
@@ -72,9 +82,12 @@ class EqosBirchMurnaghan:
             108 - 27 * Kp) * V0 ** (4 / 3) * V ** (10 / 3))) / (
             8 * V ** (22 / 3))
 
+    # Calculates energy with self.func for an arbitrary volume
     def _energy(self, volume):
         return self.func(volume, self.V0, self.K0, self.Kp, self.E0)
 
+    # Calculates the final pressure acting on the system
+    # If you taka the equilibrium volume V0 as an input the calculated pressure should be exactly 0!
     def _pressure(self, volume):
         V = volume
         V0 = self.V0
@@ -84,6 +97,7 @@ class EqosBirchMurnaghan:
         return 3 * K0 / 2 * ((V0 / V) ** (7 / 3) - (V0 / V) ** (5 / 3)) * (
             1 + 3 / 4 * (Kp - 4) * ((V0 / V) ** (2 / 3) - 1))
 
+    # Calculates the pressure derivative of the bulk modulus
     def _deriv_bulkmodulus(self, volume):
         V = volume
         V0 = self.V0
@@ -95,6 +109,7 @@ class EqosBirchMurnaghan:
             2 / 3)) * V ** 3 + (
             36 - 9 * Kp) * V0 ** (4 / 3) * V ** (7 / 3))) / (4 * V ** (16 / 3))
 
+    # Functions for extracting properties from the eos fit:
     @property
     def V_eq(self):
         return self.V0
@@ -106,6 +121,10 @@ class EqosBirchMurnaghan:
     @property
     def K_eq(self):
         return self.K0
+
+    @property
+    def Kp_eq(self):
+        return self.Kp
 
 
 class EqosMurnaghan:
@@ -160,6 +179,10 @@ class EqosMurnaghan:
     def K_eq(self):
         return self.K
 
+    @property
+    def Kp_eq(self):
+        return self.Kp
+
     def _bulk_modulus(self, v):
         return self.K * (v / self.V0)**(-self.Kp)
 
@@ -198,7 +221,7 @@ class EqosPolynomial:
 
         self.energy = np.vectorize(self._energy)
         self.pressure = np.vectorize(self._pressure)
-        self.bulk_modulus = np.vectorize(self._bulkmodulus)
+        self.bulk_modulus = np.vectorize(self._bulk_modulus)
 
     @property
     def V_eq(self):
