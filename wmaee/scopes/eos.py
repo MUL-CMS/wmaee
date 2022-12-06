@@ -200,8 +200,8 @@ class EqosPolynomial:
         self.volumes = volumes
         self.energies = energies
 
-        self.v_min = np.amin(volumes)
-        self.v_max = np.amax(volumes)
+        self.v_min = np.amin(volumes)  # returns minimum value of volumes
+        self.v_max = np.amax(volumes)  # return maximum value of volumes
 
         # Perform the fit
         self.p = np.polyfit(volumes, energies, order)
