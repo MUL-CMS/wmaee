@@ -5,8 +5,8 @@ export LC_NUMERIC="en_US.UTF-8" # if not set, commas are written as "," and not 
 
 # This small script prepares the scalar-relativistic Green's function EMTO calculation step!
 # And, It is adjusted for the mul-hpc!!
-# In principle, it creates a bunch of calculations with variing Wigner-Seitz radius (similar to )
-# If FCD is set to Y in the input file, the full charge density is saved.
+# In principle, it creates a bunch of calculations with varying Wigner-Seitz radius.
+# If FCD is set to Y in the input.dat, the full charge density is saved.
 # This can be then used to calulate the total energy in the last step, called kfcd!
 
 ##########################################################################################################
