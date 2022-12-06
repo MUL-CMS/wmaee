@@ -206,7 +206,9 @@ class EqosPolynomial:
         # Perform the fit
         self.p = np.polyfit(volumes, energies, order)
 
-        self.pd = np.polyder(self.p)
+        self.pd = np.polyder(self.p)  # the first derivative of polynomial p
+
+        # the fist derivative of polynomial pd, and second derivative of polynomial p
         self.pd2 = np.polyder(self.pd)
 
         roots = np.roots(self.pd)
