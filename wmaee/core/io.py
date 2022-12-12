@@ -3,8 +3,8 @@ from os.path import exists
 
 class working_directory(object):
     """
-    Class for convenient change into a tree of subdirectories including their 
-    creation.
+    A class for convenient change into a tree of subdirectories including 
+    their creation.
     """
     
     def __split_path(self, path):
@@ -28,6 +28,9 @@ class working_directory(object):
     
     def __init__(self, path, create=True):
         """
+        A class for convenient change into a tree of subdirectories including 
+        their creation.
+        
         Parameters
         ----------
         path : str
@@ -69,9 +72,29 @@ class working_directory(object):
     @property
     def active(self):
         return self._active
-    
-# def grep(file, string):
-#     with open(file, 'r') as fp:
-#         for line in fp:
-#             if string in line:
-#                 yield line
+
+
+# Utility functions
+def grep(file, string):
+    """
+    A simple python implementation of the Linux `grep` command. It goes through
+    a (text) file and returns all lines containing a desired string as 
+    a generator.
+
+    Parameters
+    ----------
+    file : str
+        Name of the file to be opened for reading and searching of the string.
+    string : str
+        String to be searched for.
+
+    Yields
+    ------
+    line : str
+        (Next) line containing string `string` in the file `file`.
+
+    """    
+    with open(file, 'r') as f:
+        for line in f:
+            if string in line:
+                yield line
