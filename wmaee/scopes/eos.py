@@ -203,7 +203,7 @@ class EqosPolynomial:
         self.v_min = np.amin(volumes)  # returns minimum value of volumes
         self.v_max = np.amax(volumes)  # return maximum value of volumes
 
-        # Perform the fit
+        # Performs the fit and returns the coefficients
         self.p = np.polyfit(volumes, energies, order)
 
         self.pd = np.polyder(self.p)  # the first derivative of polynomial p
@@ -237,6 +237,7 @@ class EqosPolynomial:
     def K_eq(self):
         return self.bulk_modulus(self.V0)
 
+    # Evaluates the polynomial with the fitted parameters at a specific volume
     def _energy(self, v):
         return np.polyval(self.p, v)
 
