@@ -2,247 +2,166 @@
 Convenient functions for fitting the energy-volume calculations.
 """
 
+from scipy.optimize import curve_fit
 import numpy as np
-import scipy.optimize as opt
-from typing import Sequence
-import warnings
 
 
-class EqosBirchMurnaghan:
-
-    # __init__ function creates an Object from the class EqosBirchMurnaghan
-    # and initializes the object's attributes
-    def __init__(self, volumes: np.ndarray, energies: np.ndarray, initial_value: Sequence = None) -> None:
-        self.volumes = volumes
-        self.energies = energies
-
-        self.initial_value = initial_value
-
-        if self.initial_value is None:
-            emin = np.min(self.energies)  # guessing value for energy minimum
-            # guessing value for volume minimum
-            V0 = self.volumes[np.argmin(self.energies)]
-            # guessing value for bulk modulus = 0.01
-            self.initial_value = (V0, 0.01, 0.1, emin)
-            # guessing value for pressure derivative of bulk modulus = 0.1
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            # p_out is the variable, which stores the fitted parameters in the order V0, K0, Kp, and E0
-            # pcov indicates the qualtiy of the fit
-            p_out, pcov = opt.curve_fit(self.func, self.volumes, self.energies,
-                                        jac=self.jac,
-                                        p0=self.initial_value,
-                                        xtol=1e-10,
-                                        maxfev=5000)
-
-        # Extracts the equilibrium properties of the fit from p_out:
-        self.V0 = p_out[0]
-        self.K0 = p_out[1]
-        self.Kp = p_out[2]
-        self.E0 = p_out[3]
-
-        self.energy = np.vectorize(self._energy)
-        self.pressure = np.vectorize(self._pressure)
-        self.bulk_modulus = np.vectorize(self._bulkmodulus)
-
-    # Defines Birch-Murnaghan EOS function
-    def func(self, V, V0, K0, Kp, E0):
-        eta = (V0 / V) ** (2.0 / 3.0)
-        E = E0 + 9.0 * K0 * V0 / 16.0 * (eta - 1.0) ** 2 \
-            * (Kp * (eta - 1.0) + 6.0 - 4.0 * eta)
-        return E
-
-    def jac(self, V, V0, K0, Kp, E0):
-        eta = (V0 / V) ** (2 / 3)
-
-        dfuncdV0 = (3 * K0 * (V0 ** (2 / 3) - V ** (2 / 3)) * ((3 * Kp - 12) * V0 ** (5 / 3) + (
-            (6 * Kp - 24) * V0 ** (2 / 3) + (62 - 12 * Kp) * V ** (2 / 3)) * V0 + (3 * Kp - 18) *
-            V ** (4 / 3) * V0 ** (1 / 3))) / (
-            16 * V ** 2 * V0 ** (1 / 3))
-
-        dfuncdK0 = 9 * V0 / 16.0 * (eta - 1.0) ** 2 \
-            * (6.0 + Kp * (eta - 1) - 4 * eta)
-
-        dfuncdKp = 9 * V0 * K0 / 16 * ((eta - 1) ** 3)
-
-        dfuncdE0 = np.ones_like(V)
-
-        return np.stack((dfuncdV0, dfuncdK0, dfuncdKp, dfuncdE0), axis=-1)
-
-    # Calculates the bulk modulus
-    def _bulkmodulus(self, volume):
-        V = volume
-        V0 = self.V0
-        K0 = self.K0
-        Kp = self.Kp
-
-        return (V) * -(K0 * V0 ** (5 / 3) * ((144 - 27 * Kp) * V ** (14 / 3) + (
-            (12 * Kp - 64) * V ** (2 / 3) + (42 * Kp - 196) * V0 ** (2 / 3)) * V ** 4 + (
-            108 - 27 * Kp) * V0 ** (4 / 3) * V ** (10 / 3))) / (
-            8 * V ** (22 / 3))
-
-    # Calculates energy with self.func for an arbitrary volume
-    def _energy(self, volume):
-        return self.func(volume, self.V0, self.K0, self.Kp, self.E0)
-
-    # Calculates the final pressure acting on the system
-    # If you taka the equilibrium volume V0 as an input the calculated pressure should be exactly 0!
-    def _pressure(self, volume):
-        V = volume
-        V0 = self.V0
-        K0 = self.K0
-        Kp = self.Kp
-
-        return 3 * K0 / 2 * ((V0 / V) ** (7 / 3) - (V0 / V) ** (5 / 3)) * (
-            1 + 3 / 4 * (Kp - 4) * ((V0 / V) ** (2 / 3) - 1))
-
-    # Calculates the pressure derivative of the bulk modulus
-    def _deriv_bulkmodulus(self, volume):
-        V = volume
-        V0 = self.V0
-        K0 = self.K0
-        Kp = self.Kp
-
-        return -(K0 * V0 ** (5 / 3) * ((48 - 9 * Kp) * V ** (11 / 3) + ((6 * Kp - 32)
-                                                                        * V ** (2 / 3) + (12 * Kp - 56) * V0 ** (
-            2 / 3)) * V ** 3 + (
-            36 - 9 * Kp) * V0 ** (4 / 3) * V ** (7 / 3))) / (4 * V ** (16 / 3))
-
-    # Functions for extracting properties from the eos fit:
-    @property
-    def V_eq(self):
-        return self.V0
-
-    @property
-    def E_eq(self):
-        return self.E0
-
-    @property
-    def K_eq(self):
-        return self.K0
-
-    @property
-    def Kp_eq(self):
-        return self.Kp
-
-
-class EqosMurnaghan:
+def murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
     """
-    Implements a fit using the Murnaghan equation of state.
+    This function takes two arguments in np.ndarray format, 
+    performs a Murnaghan EoS fit, and returns 
+    E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit.
+
+    E_eq ... equilibrium energy.
+    V_eq ... equilibrium volume.
+    B_eq ... equilibrium bulk modulus.
+    Bp_eq .. pressure derivative of the equilibrium bulk modulus.
+
+    V_fit and E_fit are generated volumes and with the fitted
+    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
+    V_fit and E_fit can then be used for plotting the fit. 
     """
 
-    def __init__(self, volumes, energies):
-        self.volumes = volumes
-        self.energies = energies
+    # Defining the Murnaghan equation of state function
+    def murnaghan_eos(V, E0, V0, B0, Bp):
+        return E0 + B0*V0*(1/(Bp*(Bp-1))*(V/V0)**(1-Bp) + V/(Bp*V0) - 1/(Bp-1))
 
-        self.v_min = np.amin(volumes)
-        self.v_max = np.amax(volumes)
+    # Finding V0 and E0
+    E0 = np.min(energies)
+    min_index = np.argmin(energies)
+    V0 = volumes[min_index]
 
-        # Set initial parameters
-        i_min = np.argmin(self.energies)
-        e0 = self.energies[i_min]
-        v0 = self.volumes[i_min]
-        K = 1.0
-        Kp = 3.5
+    # Initial guesses
+    p_in = [E0, V0, 1, 3.5]
 
-        p_in = (e0, v0, K, Kp)
+    # Fitting the data to the Murnaghan equation of state
+    p_opt, p_cov = curve_fit(murnaghan_eos, volumes, energies, p0=p_in)
 
-        p_out, pcov = opt.curve_fit(self.fun, volumes, energies, p0=p_in)
+    # Extracting fitted parameters
+    E_eq = p_opt[0]
+    V_eq = p_opt[1]
+    B_eq = p_opt[2]
+    Bp_eq = p_opt[3]
 
-        self.E0 = p_out[0]
-        self.V0 = p_out[1]
-        self.K = p_out[2]
-        self.Kp = p_out[3]
+    # Calculating the standard deviation of the fitted parameters
+    p_err = np.sqrt(np.diag(p_cov))
 
-        # Define convenience methods
-        self.energy = np.vectorize(lambda v:
-                                   self.fun(v, self.E0, self.V0, self.K, self.Kp))
+    print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
 
-        self.pressure = np.vectorize(self._pressure)
-        self.bulk_modulus = np.vectorize(self._bulk_modulus)
+    # Preparing the values for the plot
+    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
+    E_fit = murnaghan_eos(V_fit, E_eq, V_eq, B_eq, Bp_eq)
 
-    def fun(self, v, E0, V0, K, Kp):
-        nu = v / V0
-        return E0 + K * V0 / Kp * (
-            (nu**(-Kp + 1) - 1) / (Kp - 1) + nu - 1)
+    return E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit
 
-    @property
-    def V_eq(self):
-        return self.V0
-
-    @property
-    def E_eq(self):
-        return self.E0
-
-    @property
-    def K_eq(self):
-        return self.K
-
-    @property
-    def Kp_eq(self):
-        return self.Kp
-
-    def _bulk_modulus(self, v):
-        return self.K * (v / self.V0)**(-self.Kp)
-
-    def _pressure(self, v):
-        return self.K / self.Kp * (
-            (v / self.V0)**(-self.Kp) - 1)
+###############################################################################
 
 
-class EqosPolynomial:
+def birch_murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
     """
-    Implements a fit using the polynomial equation of state.
+    This function takes two arguments in np.ndarray format, 
+    performs a Birch-Murnaghan EoS fit, and returns 
+    E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit.
+
+    E_eq ... equilibrium energy.
+    V_eq ... equilibrium volume.
+    B_eq ... equilibrium bulk modulus.
+    Bp_eq .. pressure derivative of the equilibrium bulk modulus.
+
+    V_fit and E_fit are generated volumes and with the fitted
+    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
+    V_fit and E_fit can then be used for plotting the fit. 
     """
 
-    def __init__(self, volumes, energies, order=3):
-        self.volumes = volumes
-        self.energies = energies
+    # Defining the Birch-Murnaghan equation of state function
+    def birch_murnaghan_eos(V, E0, V0, B0, Bp):
+        return E0 + (9*B0*V0/16)*(((V0/V)**(2/3)-1)**3*Bp + ((V0/V)**(2/3)-1)**2*(6-4*(V0/V)**(2/3)))
 
-        self.v_min = np.amin(volumes)  # returns minimum value of volumes
-        self.v_max = np.amax(volumes)  # return maximum value of volumes
+    # Finding V0 and E0
+    E0 = np.min(energies)
+    min_index = np.argmin(energies)
+    V0 = volumes[min_index]
 
-        # Performs the fit and returns the coefficients
-        self.p = np.polyfit(volumes, energies, order)
+    # Initial guesses
+    p_in = [E0, V0, 1, 3.5]
 
-        self.pd = np.polyder(self.p)  # the first derivative of polynomial p
+    # Fitting the data to the Murnaghan equation of state
+    p_opt, p_cov = curve_fit(birch_murnaghan_eos, volumes, energies, p0=p_in)
 
-        # the fist derivative of polynomial pd, and second derivative of polynomial p
-        self.pd2 = np.polyder(self.pd)
+    # Extracting fitted parameters
+    E_eq = p_opt[0]
+    V_eq = p_opt[1]
+    B_eq = p_opt[2]
+    Bp_eq = p_opt[3]
 
-        roots = np.roots(self.pd)
+    # Calculating the standard deviation of the fitted parameters
+    p_err = np.sqrt(np.diag(p_cov))
 
-        i_min = np.where((self.v_min <= roots) & (roots <= self.v_max))[0]
-        if not i_min:
-            raise RuntimeError(
-                "Equation of state seems not to contain a minimum")
+    print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
 
-        self.V0 = roots[i_min][0].real
-        self.E0 = np.polyval(self.p, self.V0)
+    # Preparing the values for the plot
+    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
+    E_fit = birch_murnaghan_eos(V_fit, E_eq, V_eq, B_eq, Bp_eq)
 
-        self.energy = np.vectorize(self._energy)
-        self.pressure = np.vectorize(self._pressure)
-        self.bulk_modulus = np.vectorize(self._bulk_modulus)
+    return E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit
 
-    @property
-    def V_eq(self):
-        return self.V0
+#################################################################################
 
-    @property
-    def E_eq(self):
-        return self.E0
 
-    @property
-    def K_eq(self):
-        return self.bulk_modulus(self.V0)
+def polynomial_fit(volumes: np.ndarray, energies: np.ndarray, order=3):
+    """
+    This function takes two arguments in np.ndarray format, 
+    performs a polynomial fit, and returns 
+    E_eq, V_eq, B_eq, V_fit, E_fit.
+    The third parameter is the order of the polynomial and is optional.
+    The order should be higher than 2, because the E-V curves 
+    typically don't have a quadratic shape! 
 
-    # Evaluates the polynomial with the fitted parameters at a specific volume
-    def _energy(self, v):
-        return np.polyval(self.p, v)
+    E_eq ... equilibrium energy.
+    V_eq ... equilibrium volume.
+    B_eq ... equilibrium bulk modulus.
 
-    def _pressure(self, v):
-        return -np.polyval(self.pd, v)
+    V_fit and E_fit are generated volumes and with the fitted
+    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
+    V_fit and E_fit can then be used for plotting the fit. 
+    """
 
-    def _bulk_modulus(self, v):
-        return np.polyval(self.pd2, v) * v
+    # Extract the smallest and the biggest volume
+    V_min = np.amin(volumes)
+    V_max = np.amax(volumes)
+
+    # Polynomial fit of the data
+    coefficients = np.polyfit(volumes, energies, order)
+
+    # Calculate the coefficients of the first derivative
+    first_derivative = np.polyder(coefficients, 1)
+
+    # Calculate at which volume the first derivative is zero
+    roots = np.roots(first_derivative)
+
+    # Now we need to extract indices of the correct
+    # minimum volume from roots
+    v_min_indices = np.where((V_min <= roots) & (roots <= V_max))
+
+    # With v_min_indices we can extract the correct minimum
+    # volume from roots
+    V_eq = float(roots[v_min_indices])
+
+    # Further, we can now evaluate the polynomial at V_eq
+    # to get the equilubrium energy
+    E_eq = np.polyval(coefficients, V_eq)
+
+    # Now, we will calculate the bulk modulus, B0
+    # In general, B = - V*(dp/dV)
+    # p(V) = first derivative, hence dp/dV is the second
+    # derivative of the energy polynomial
+    second_derivative = np.polyder(coefficients, 2)
+
+    # Calculating the bulk modulus
+    B_eq = -V_eq * (-np.polyval(second_derivative, V_eq))
+
+    # Preparing the values for the plot
+    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
+    E_fit = np.polyval(coefficients, V_fit)
+
+    return E_eq, V_eq, B_eq, V_fit, E_fit
