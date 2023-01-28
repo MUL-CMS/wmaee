@@ -1,0 +1,48 @@
+- wmaee
+
+  - core
+    - working_directory
+    - to_ase
+    - to_pymatgen
+  - codes
+    - vasp
+      - make_input
+      - parse_output
+      - parse_energies
+      * lammps
+        - parse_energies
+        - parse_thermo
+  - scope
+    - eos
+      - eos_birch_murnaghan [x]
+      - eos_murnaghan [x]
+      - polynomial [x]
+    - cij
+      - to_voigt
+      - to_tensor
+      - create_deformation
+      - cij_from_stress
+      - project_cubic
+      - project_isotropic
+      - project_hexagonal
+    - debye
+    - structural analyzis
+      - rdf
+      - rdf_partial
+
+- recipes
+  - convergence_test
+    - vasp
+    - greenalm
+  - structure_optimization
+    - vasp
+    - lammps
+    - cubic/hexagonal/general_with_gadget
+  - elasticity
+    - vasp
+    - lammps
+    - stress-strain
+    - energy-strain
+      - finite_T
+  - electronic_structure
+    - plotting_DOS
