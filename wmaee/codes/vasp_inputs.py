@@ -47,6 +47,7 @@ def change_scale(filename: str, output_name: str, initial_scale: str, final_scal
         Modified POSCAR file.
 
     '''
+    working_dir = os.getcwd()
     input_file = os.path.join(working_dir, filename)
     if not os.path.exists(input_file):
         raise FileNotFoundError(f'File {input_file} not found.')
@@ -100,6 +101,9 @@ def concat_potcar_files(poscar_in='POSCAR', potcar_out='POTCAR', potcar_path=os.
     for element in elements:
         element = element.strip('\n')
         elements_list.append(element)
+
+    # Remove empty strings
+    elements_list = [x for x in elements_list if x.strip()]
 
     # write POTCAR file in the same order of elements in POSCAR
     with open(potcar_out, 'wb') as outfile:
