@@ -3,7 +3,7 @@ import numpy as np
 import shutil
 
 
-def write_automatic_kpoints_file(length: float):
+def write_automatic_kpoints_file(length: float, output_name: str):
     '''
     This function writes a KPOINTS file which generates
     a regular Gamma-centered k-point mesh.
@@ -18,7 +18,7 @@ def write_automatic_kpoints_file(length: float):
         File named KPOINTS
 
     '''
-    with open('KPOINTS', 'w') as output:
+    with open(output_name, 'w') as output:
         output.write('Fully automatic mesh\n')
         output.write('0 # indicates automatic generation scheme\n')
         output.write('Auto # fully automatic\n')
