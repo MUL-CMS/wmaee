@@ -1,12 +1,19 @@
+import warnings
 from pymatgen.io.ase import AseAtomsAdaptor
-from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, \
-    pyiron_to_pymatgen, pymatgen_to_pyiron, Atoms as IronAtoms
 from typing import Any, Collection, Optional, NoReturn, Callable, Iterable
 from pymatgen import Structure
 from ase import Atoms as AseAtoms
 from typing import Union, Callable, List
 from functools import wraps
 
+try:
+    from pyiron.atomistics.structure.atoms import ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, \
+        pyiron_to_pymatgen, pymatgen_to_pyiron, Atoms as IronAtoms
+except ImportError:
+    message = """
+    Failed to import "pyiron.atomistics.structure.atoms"
+    ase_to_pyiron, pyiron_to_ase, ovito_to_pyiron, pyiron_to_ovito, pyiron_to_pymatgen, pymatgen_to_pyiron"""
+    warnings.warn(message, ImportWarning)
 
 def to_ase(s: Union[Structure, AseAtoms, IronAtoms]) -> AseAtoms:
     """

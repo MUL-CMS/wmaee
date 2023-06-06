@@ -17,7 +17,7 @@ OutputStream = Union[IO, asyncio.StreamWriter]
 InputStream = Union[IO, asyncio.StreamReader]
 OptionalEventLoop = Optional[Union[asyncio.AbstractEventLoop, None]]
 
-# namedtuples for more consize code. Always in order (stdin, stdout, stderr)
+# namedtuple for more concise code. Always in order (stdin, stdout, stderr)
 Callbacks = collections.namedtuple("Callback", ("stdin", "stdout", "stderr"), defaults=([], [], []))
 Forks = collections.namedtuple("Forks", ("stdin", "stdout", "stderr"), defaults=([], [], []))
 
@@ -175,6 +175,7 @@ class StandardUnixShellServer(ShellServer):
             await self.serve()
             await self.close()
         asyncio.get_event_loop().run_until_complete(_runner())
+
 
 class Shell:
 

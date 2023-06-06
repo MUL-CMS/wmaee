@@ -1,6 +1,6 @@
 import logging
 import sys
-from wmaee.core.common import Shell, LoggerMixin, OutputEmitter, EventHandler
+from wmaee.core.common import Shell, LoggerMixin, EventHandler
 from wmaee.utils import ase_to_pymatgen, to_pymatgen
 from wmaee.potentials import construct_potcar
 from wmaee.core.runner import vasp, get_vasp_configuration
