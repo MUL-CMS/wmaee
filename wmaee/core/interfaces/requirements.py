@@ -1,0 +1,46 @@
+
+import functools
+from frozendict import frozendict
+
+
+class UnmetRequirement(Exception):
+    pass
+
+
+class UnknownRequirement(Exception):
+    pass
+
+
+def test_gpaw() -> bool:
+    try:
+       from gpaw import GPAW
+    except ImportError:
+        return False
+    else:
+        return True
+
+
+REQUIREMENTS = frozendict(
+    gpaw=test_gpaw
+)
+
+
+def requires(*requirements):
+    """
+    decorator that checks whether a "requirement" = module is avail able or not. Allows for optional dependencies
+    in our package. Instead of an `ImportError` an `UnmetRequirement` excpetion is raised when the wrapped function
+    is executed but the module is not available
+    """
+
+    def decorator(f):
+        @functools.wraps(f)
+        def test_requirements(*args, **kwargs):
+            for req in requirements:
+                if req not in REQUIREMENTS:
+                    raise UnknownRequirement(req)
+                elif not REQUIREMENTS[req]():
+                    raise UnmetRequirement(req)
+            return f(*args, **kwargs)
+
+        return test_requirements
+    return decorator
