@@ -1,11 +1,9 @@
 
 import os
 import yaml
-import contextlib
 from jinja2 import Template
 from typing import Optional, Any
 from frozendict import frozendict
-
 
 
 def load_config(path: Optional[str] = None) -> frozendict:
@@ -34,7 +32,10 @@ def load_config(path: Optional[str] = None) -> frozendict:
         return frozendict(yaml.safe_load(config_handle))
 
 
-def singleton(class_: type, *args, **kwargs):
+def singleton(class_, *args, **kwargs):
+    """
+    decorator to produce a singleton instance. `args` and `kwargs` are passed to the constructor to create the instance
+    """
     instances = {}
 
     def getinstance():
@@ -53,7 +54,7 @@ class Config:
         return self._config.get(items)
 
 
-# set the default configuration file to "~/
+# construct the configuration singleton object
 Config = singleton(Config, path=None)
 
 
@@ -72,35 +73,3 @@ def render_command(application: str, **kwargs: Any) -> str:
         raise ValueError(f"Missing at least one template argument: {args}")
     return Template(script).render({arg: kwargs.get(arg) or kwargs.get(arg.lower()) for arg in args})
 
-
-# this beautiful solution was taken from:
-# https://stackoverflow.com/questions/2059482/temporarily-modify-the-current-processs-environment
-@contextlib.contextmanager
-def override_environ(*remove, **update):
-    """
-    Temporarily updates the ``os.environ`` dictionary in-place.
-
-    The ``os.environ`` dictionary is updated in-place so that the modification
-    is sure to work in all situations.
-
-    :param remove: Environment variables to remove.
-    :param update: Dictionary of environment variables and values to add/update.
-    """
-    env = os.environ
-    update = update or {}
-    remove = remove or []
-
-    # List of environment variables being updated or removed.
-    stomped = (set(update.keys()) | set(remove)) & set(env.keys())
-    # Environment variables and values to restore on exit.
-    update_after = {k: env[k] for k in stomped}
-    # Environment variables and values to remove on exit.
-    remove_after = frozenset(k for k in update if k not in env)
-
-    try:
-        env.update(update)
-        [env.pop(k, None) for k in remove]
-        yield
-    finally:
-        env.update(update_after)
-        [env.pop(k) for k in remove_after]
