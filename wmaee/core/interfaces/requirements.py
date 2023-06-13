@@ -38,10 +38,20 @@ def test_kim_query() -> bool:
         return True
 
 
+def test_nglview() -> bool:
+    try:
+       import nglview
+    except ImportError:
+        return False
+    else:
+        return True
+
+
 REQUIREMENTS = frozendict(
     gpaw=test_gpaw,
     kimpy=test_kimpy,
-    kim_query=test_kim_query
+    kim_query=test_kim_query,
+    nglview=test_nglview
 )
 
 
