@@ -95,3 +95,38 @@ class GpawCalculation:
             output_kwargs = dict(ncpus=ncpus, output=output, directory=wd)
             gpaw_kwargs = merge(self._input_parameters, output_kwargs, **kwargs)
             self.calculator, _ = gpaw(launch, self.atoms, **gpaw_kwargs)
+
+
+@dataclasses.dataclass
+class MDCalculation:
+    atoms: Atoms
+    model: str
+    _calculator: Optional[Calculator] = dataclasses.field(default=None)
+    _dynamics: Optional[MolecularDynamics] = dataclasses.field(default=None)
+
+    def set(self, f, *args, **kwargs):
+        f(self.atoms, *args, **kwargs)
+        return self
+
+    def dynamics(self, dynamics, *args, **kwargs):
+        if self._calculator is None:
+            from ase.calculators.kim import KIM
+            self._calculator = KIM(self.model)
+            self.atoms.calc = self._calculator
+        self._dynamics = dynamics(self.atoms, *args, **kwargs)
+        return self
+
+    def attach(self, f: Callable[[Atoms, ParamSpecKwargs], NoReturn], interval: int = 50, pass_atoms: bool = False):
+        if self._dynamics is None:
+            raise ValueError("No dynamics was defined for the MD calculation yet. "
+                             "Use e.g. calculation.dynamics(Langevin, 5) to set the dynamics.")
+        self._dynamics.attach((lambda: f(self.atoms, self._dynamics)) if pass_atoms else f, interval=interval)
+        return self
+
+    @requires("kimpy")
+    def run(self, *args, **kwargs):
+        if self._dynamics is None:
+            raise ValueError("No dynamics was defined for the MD calculation yet. "
+                             "Use e.g. calculation.dynamics(Langevin, 5) to set the dynamics.")
+        self._dynamics.run(*args, **kwargs)
+        return self
