@@ -41,14 +41,14 @@ def test_kim_query() -> bool:
 REQUIREMENTS = frozendict(
     gpaw=test_gpaw,
     kimpy=test_kimpy,
-    kimpy_query=test_kim_query
+    kim_query=test_kim_query
 )
 
 
 def requires(*requirements):
     """
     decorator that checks whether a "requirement" = module is avail able or not. Allows for optional dependencies
-    in our package. Instead of an `ImportError` an `UnmetRequirement` excpetion is raised when the wrapped function
+    in our package. Instead of an `ImportError` an `UnmetRequirement` exception is raised when the wrapped function
     is executed but the module is not available
     """
 
