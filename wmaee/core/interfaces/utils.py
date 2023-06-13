@@ -4,7 +4,7 @@ import yaml
 from ase import Atoms
 from jinja2 import Template
 from frozendict import frozendict
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Type, Callable, NoReturn
 from wmaee.core.interfaces.requirements import requires
 
 
@@ -34,7 +34,7 @@ def load_config(path: Optional[str] = None) -> frozendict:
         return frozendict(yaml.safe_load(config_handle))
 
 
-def singleton(class_, *args, **kwargs):
+def singleton(class_: Type, *args, **kwargs) -> Callable[[], NoReturn]:
     """
     decorator to produce a singleton instance. `args` and `kwargs` are passed to the constructor to create the instance
     """
