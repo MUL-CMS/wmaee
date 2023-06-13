@@ -4,14 +4,16 @@ import tempfile
 import contextlib
 import dataclasses
 from frozendict import frozendict
-from typing import NoReturn, Any, TypeVar, Optional, Dict
+from typing import Any, TypeVar, Optional, Dict, Callable, NoReturn, ParamSpecKwargs
 
 from ase import Atoms
 from ase.calculators.vasp import Vasp
+from ase.md.md import MolecularDynamics
+from ase.calculators.calculator import Calculator
 
 from wmaee.core.utils import merge
 from wmaee.core.interfaces.requirements import requires
-from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator
+from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw
 
 Incar = Potcar = frozendict
 VaspCalculation = TypeVar("VaspCalculation")
@@ -29,6 +31,15 @@ class VaspCalculation:
     calculator: Optional[Vasp] = dataclasses.field(default=None)
 
     def tags(self, *remove: str, **tags) -> VaspCalculation:
+        """
+        set INCAR tags, override them or remove them
+
+        :param remove: INCAR tags to remove
+        :type remove: str
+        :param tags: INCAR tags to set or override
+        :return: calculation instance
+        :rtype: VaspCalculation
+        """
         new_incar = dict(self.incar, **tags)
         for removal in remove:
             if removal in new_incar:
