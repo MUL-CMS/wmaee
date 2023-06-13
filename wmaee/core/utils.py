@@ -3,12 +3,14 @@ import os
 import uuid
 import shutil
 import contextlib
-from typing import Dict, Type
+import collections.abc
+from typing import Dict, Type, Any, Optional
+
 
 # this beautiful solution was taken from:
 # https://stackoverflow.com/questions/2059482/temporarily-modify-the-current-processs-environment
 @contextlib.contextmanager
-def override_environ(*remove, **update):
+def override_environ(*remove: str, **update):
     """
     Temporarily updates the ``os.environ`` dictionary in-place.
 
@@ -45,7 +47,7 @@ class working_directory(object):
     Can also be nested.
     """
 
-    def __init__(self, name=None, prefix=None, delete=False):
+    def __init__(self, name: Optional[str] = None, prefix: Optional[str] = None, delete: bool =False):
         """
         Constructs a working_directory object
         :param name: name of the directory if None is given `os.getcwd()` will be used (default is `None`)
