@@ -13,5 +13,5 @@ _templates/
 
 pyiron.log
 .pytest_cache/
-*sqs*.yaml
-*sqs*.yml
+
+.ipynb_checkpoints/
