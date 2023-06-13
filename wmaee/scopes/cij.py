@@ -3,10 +3,11 @@ Convenient functions for working with elasticity.
 """
 
 import numpy as np
+from typing import Tuple
 from itertools import product
 
 
-def index_from_voigt(i):
+def index_from_voigt(i: int) -> Tuple[int, int]:
     """
     Converts Voigt's (1 index) and tensorial (2 indices) notation
 
@@ -27,23 +28,23 @@ def index_from_voigt(i):
 
     """
     if i == 0:
-        return (0, 0)
+        return 0, 0
     elif i == 1:
-        return (1, 1)
+        return 1, 1
     elif i == 2:
-        return (2, 2)
+        return 2, 2
     elif i == 3:
-        return (1, 2)
+        return 1, 2
     elif i == 4:
-        return (0, 2)
+        return 0, 2
     elif i == 5:
-        return (0, 1)
+        return 0, 1
     else:
         raise ValueError('Unknown value of index')
 
 
 
-def index_to_voigt(i, j):
+def index_to_voigt(i: int, j: int) -> int:
     """
     Converts tensorial (2 indices) to Voigt's (1 index) notation.
 
@@ -75,11 +76,10 @@ def index_to_voigt(i, j):
         elif i+j == 3:
             return 6
     else:
-        raise ValueError('Unknown value of indeces') 
+        raise ValueError('Unknown value of indices')
 
 
-
-def transform_tensor(t, A, fact_two=False):
+def transform_tensor(t: np.ndarray, a: np.ndarray, fact_two: bool = False) -> np.ndarray:
     """
     Transforms tensor according to a given transformation matrix
 
@@ -88,7 +88,7 @@ def transform_tensor(t, A, fact_two=False):
     t : numpy.ndarray
         Tensor to be transformed represented eiter by (6x6) or 
         (3x3x3x3) matrix.
-    A : numpy.ndarray
+    a : numpy.ndarray
         Transformation matrix.
     fact_two : bool, optional
          Whether to apply factors 2, 4, ... during conversion 
@@ -113,7 +113,7 @@ def transform_tensor(t, A, fact_two=False):
         e = np.zeros(81).reshape((3, 3, 3 ,3))
         for i, j, k, l in product(np.arange(3), np.arange(3), np.arange(3), np.arange(3)):
             for a, b, c, d in product(np.arange(3), np.arange(3), np.arange(3), np.arange(3)):
-                e[i, j, k, l] += np.around(A[i, a]*A[j, b]*A[k, c]*A[l, d]*t[a, b, c, d], 2)
+                e[i, j, k, l] += np.around(a[i, a] * a[j, b] * a[k, c] * a[l, d] * t[a, b, c, d], 2)
         if voigt:
             e = to_voigt(e, fact_two)
         return e
@@ -121,8 +121,10 @@ def transform_tensor(t, A, fact_two=False):
         raise ValueError('Unknown shape of the input tensor.')
 
 
-
-def from_voigt(m, div_two=True):
+def from_voigt(m: np.ndarray, div_two: bool = True) -> np.ndarray:
+    """
+    TODO: add docstring here (but consitently)
+    """
     if m.shape == (6, ):
         # 2nd rank tensor: vector 6x1 -> matrix 3x3
         e = m.copy()
@@ -154,7 +156,11 @@ def from_voigt(m, div_two=True):
     else:
         raise ValueError('Unknown shape of the input data')    
 
-def to_voigt(m, times_two=True):
+
+def to_voigt(m: np.ndarray, times_two: bool = True) -> np.ndarray:
+    """
+    TODO: add docstring here (but consitently)
+    """
     if m.shape == (3, 3):
         voigt = np.array([
             m[0, 0],
@@ -183,12 +189,14 @@ def to_voigt(m, times_two=True):
     else:
         raise ValueError('A stress matrix must be of shape (3,3)')
 
-def project_cubic(cij):
+
+def project_cubic(cij: np.ndarray) -> np.ndarray:
     """
     Computes to Cij tensor projected to cubic symmetry
-    :param cij: (arraylike) of shape (6,6) the raw elasticity tensor
-    :param pretty: (bool) if the Cij tensor should be wrapped into a sympy.Matrix for nicer view in Jupyter notebooks
-    :return: (numpy.ndarray or sympy.Matrix) the projected Cij tensor
+    :param cij: array of shape (6,6) the raw elasticity tensor
+    :type cij: np.ndarrays
+    :return: the projected Cij tensor
+    :rtype: np.ndarray
     """
     cij = np.array(cij)
     projected_cij = np.zeros((6, 6))
@@ -206,13 +214,16 @@ def project_cubic(cij):
     projected_cij[1, 2] = projected_cij[1, 0]
     return projected_cij
 
-def project_hexagonal(cij):
+
+def project_hexagonal(cij: np.ndarray) -> np.ndarray:
     """
     Computes Cij tensor projected to hexagonal symmetry
-    :param cij: (arraylike) of shape (6,6) the raw elasticity tensor
-    :param pretty: (bool) if the Cij tensor should be wrapped into a sympy.Matrix for nicer view in Jupyter notebooks
-    :return: (numpy.ndarray or sympy.Matrix) the projected Cij tensor
-    """ 
+    :param cij: of shape (6,6) the raw elasticity tensor
+    :type cij: np.ndarray
+    :return: the projected Cij tensor
+    :rtype: np.ndarray
+    """
+
     # convert from Cij to cij_hat, Moakher & Norris, Eq. 7
     cij_hat = np.array(cij).copy()
     for j in np.arange(3, 6):
