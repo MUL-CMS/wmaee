@@ -17,6 +17,7 @@ Incar = Potcar = frozendict
 VaspCalculation = TypeVar("VaspCalculation")
 GPAW = TypeVar("GPAW")
 
+
 @dataclasses.dataclass
 class VaspCalculation:
     atoms: Atoms
@@ -66,7 +67,7 @@ class VaspCalculation:
 
 class GpawCalculation:
 
-    def __init__(self, atoms: Atoms, kpts: Any = (1,1,1), xc: str = "PBE", **kwargs):
+    def __init__(self, atoms: Atoms, kpts: Any = (1, 1, 1), xc: str = "PBE", **kwargs):
         self.atoms = atoms
         self._input_parameters: Dict[str, Any] = merge(dict(kpts=kpts, xc=xc), **kwargs)
         self.calculator: Optional[GPAW] = None

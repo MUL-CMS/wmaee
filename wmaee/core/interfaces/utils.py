@@ -1,9 +1,11 @@
 
 import os
 import yaml
+from ase import Atoms
 from jinja2 import Template
-from typing import Optional, Any
 from frozendict import frozendict
+from typing import Optional, Any, List
+from wmaee.core.interfaces.requirements import requires
 
 
 def load_config(path: Optional[str] = None) -> frozendict:
@@ -72,4 +74,12 @@ def render_command(application: str, **kwargs: Any) -> str:
     if not all(arg in kwargs or arg.lower() in kwargs for arg in args):
         raise ValueError(f"Missing at least one template argument: {args}")
     return Template(script).render({arg: kwargs.get(arg) or kwargs.get(arg.lower()) for arg in args})
+
+
+@requires("kim_query")
+def available_models(atoms: Atoms, interface: str = "any", potential_type: str | List[str] = "any", simulator_name: str | List[str] = "any") -> List[str]:
+
+    import kim_query
+    species = list(set(atoms.symbols))
+    print(kim_query.get_available_models(species, model_interface=["sm"], simulator_name=["LAMMPS"]))
 

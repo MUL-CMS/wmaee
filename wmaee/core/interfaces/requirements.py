@@ -20,8 +20,28 @@ def test_gpaw() -> bool:
         return True
 
 
+def test_kimpy() -> bool:
+    try:
+       import kimpy
+    except ImportError:
+        return False
+    else:
+        return True
+
+
+def test_kim_query() -> bool:
+    try:
+       import kim_query
+    except ImportError:
+        return False
+    else:
+        return True
+
+
 REQUIREMENTS = frozendict(
-    gpaw=test_gpaw
+    gpaw=test_gpaw,
+    kimpy=test_kimpy,
+    kimpy_query=test_kim_query
 )
 
 
