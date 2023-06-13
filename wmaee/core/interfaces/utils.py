@@ -1,11 +1,13 @@
 
 import os
 import yaml
+import functools
 from ase import Atoms
 from jinja2 import Template
 from frozendict import frozendict
-from typing import Optional, Any, List, Type, Callable, NoReturn
+from wmaee.core.utils import ensure_iterable
 from wmaee.core.interfaces.requirements import requires
+from typing import Optional, Any, List, Type, Callable, NoReturn
 
 
 def load_config(path: Optional[str] = None) -> frozendict:
@@ -44,6 +46,7 @@ def singleton(class_: Type, *args, **kwargs) -> Callable[[], NoReturn]:
         if class_ not in instances:
             instances[class_] = class_(*args, **kwargs)
         return instances[class_]
+
     return getinstance
 
 
@@ -77,9 +80,35 @@ def render_command(application: str, **kwargs: Any) -> str:
 
 
 @requires("kim_query")
-def available_models(atoms: Atoms, interface: str = "any", potential_type: str | List[str] = "any", simulator_name: str | List[str] = "any") -> List[str]:
+def available_models(atoms: Atoms, species_logic: str | List[str] = "and", model_interface: str | List[str] = "any",
+                     potential_type: str | List[str] = "any", simulator_name: str | List[str] = "any") -> List[str]:
+    """
+    Query the KIM online API for available potentials that might be used for {atoms}
 
+    :param atoms: atoms objects
+    :type atoms: ase.Atoms
+    :param species_logic: reduction operation if {atoms} contains more than one species. Allowed choices are "and" and
+        "or". (default is "and")
+    :type species_logic: str | List[str]
+    :param model_interface: model interface to select. Allowed choices are "sm" = Simulator Model, which refers to
+        models bound to a specific MD code. "pm" = Portable Model(s) might be used with and MD code, and "any" if it
+        does not matter (default is "any")
+    :type model_interface: str | List[str]
+    :param potential_type: the name or a list of names for potential types E.g. "meam", "eam" etc. (default is "any")
+    :type potential_type: str | List[str]
+    :param simulator_name: the name of a list of simulator names. E.g. "LAMMPS" (default is "any")
+    :type simulator_name: str | List[str]
+    :return: a list of available model names
+    :rtype: List[str]
+    """
     import kim_query
     species = list(set(atoms.symbols))
-    print(kim_query.get_available_models(species, model_interface=["sm"], simulator_name=["LAMMPS"]))
+    model_interface = ensure_iterable(model_interface, factory=list)
+    potential_type = ensure_iterable(potential_type, factory=list)
+    simulator_name = ensure_iterable(simulator_name, factory=list)
+    species_logic = ensure_iterable(species_logic, factory=list)
+    return kim_query.get_available_models(species, species_logic=species_logic, model_interface=model_interface,
+                                          simulator_name=simulator_name, potential_type=potential_type)
 
+
+available_lammps_models = functools.partial(available_models, simulator_name="LAMMPS", model_interface="sm")
