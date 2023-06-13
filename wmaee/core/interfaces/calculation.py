@@ -4,7 +4,7 @@ import tempfile
 import contextlib
 import dataclasses
 from frozendict import frozendict
-from typing import Any, TypeVar, Optional, Dict, Callable, NoReturn, ParamSpecKwargs
+from typing import Any, TypeVar, Optional, Dict, Callable, NoReturn, ParamSpecKwargs, TextIO
 
 from ase import Atoms
 from ase.calculators.vasp import Vasp
@@ -22,6 +22,20 @@ GPAW = TypeVar("GPAW")
 
 @dataclasses.dataclass
 class VaspCalculation:
+    """
+    Interface to execute VASP calculations via `ase.calculators.vasp.Vasp`, with improved code semantics
+    An example to use this class reads
+
+        .. code-block:: python
+
+            calculation = VaspCalculation(atoms, incar, kpts=(2,2,2), xc="pbe")
+            calculation = calculation.tags(IBRION=2, LWAVE=False, LCHARG=True)  # override INCAR tags
+            calculation.write_input("vasp_calc_dir_prepare")
+            calculation.run()  # in temporary directory
+            calculation.run("vasp_dir")  # run the calculation in the directory in "vasp_dir"
+
+    """
+
     atoms: Atoms
     incar: frozendict = dataclasses.field(default_factory=Incar)
     kpts: Any = dataclasses.field(default=(1, 1, 1))
@@ -49,9 +63,18 @@ class VaspCalculation:
 
     @classmethod
     def from_directory(cls, path: str = os.getcwd(), **kwargs) -> VaspCalculation:
+        """
+        Create a VaspCalculation instance from a folder which contains VASP input files
+
+        :param path: folder name to load the data from (default is `os.getcwd()`)
+        :type path: str
+        :param kwargs: keyword arguments are forwarded to `ase.calculator.vasp.Vasp` constructor
+        :return: calculation instance
+        :retype: VaspCalculation
+        """
         calculator, atoms = read_results_vasp(directory=path, **kwargs)
-        # the vasp calculator class splits up the incar tags and gathers them in several different variables.
-        # the names of these variables depend on the data type of the incar tags' value.
+        # the vasp calculator class splits up the INCAR tags and gathers them in several different variables.
+        # the names of these variables depend on the data type of the INCAR tags' value.
         parameters = ["int_params", "list_int_params", "float_params", "list_float_params", "bool_params",
                       "list_bool_params", "exp_params", "string_params", "special_params"]
         incar = frozendict({tag.upper(): value for parameter_collection in parameters for tag, value in
@@ -60,7 +83,20 @@ class VaspCalculation:
                    gamma_centered=calculator.input_params.get("gamma", False), xc=calculator.get_xc_functional(),
                    calculator=calculator)
 
-    def run(self, directory: Optional[str] = None, ncpus: int = 2, mode: str = "std", output: str = '-', **kwargs):
+    def run(self, directory: Optional[str] = None, ncpus: int = 2, mode: str = "std", output: str | TextIO = '-', **kwargs) -> NoReturn:
+        """
+        Run the VaspCalculation instance. If {directory} is not None a temporary directory will be created.
+
+        :param directory: the directory where the VASP code will be executed (default is `None`)
+        :type directory: Optional[str]
+        :param ncpus: number of MPI ranks (default is 2)
+        :type ncpus: int
+        :param mode: the VASP executable to execute. Either "std", "gam" or "ncl". (default is "std")
+        :type mode: str
+        :param output: redirection for the VASP's output. "-" means stdout. Might be a filename of file object
+            (default is "-")
+        :type output: str | TextIO
+        """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
 
         with directory_context as wd:
