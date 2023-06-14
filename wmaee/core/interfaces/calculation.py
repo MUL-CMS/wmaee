@@ -73,7 +73,7 @@ class VaspCalculation:
         :retype: VaspCalculation
         """
         calculator, atoms = read_results_vasp(directory=path, **kwargs)
-        # the vasp calculator class splits up the INCAR tags and gathers them in several different variables.
+        # the VASP calculator class splits up the INCAR tags and gathers them in several different variables.
         # the names of these variables depend on the data type of the INCAR tags' value.
         parameters = ["int_params", "list_int_params", "float_params", "list_float_params", "bool_params",
                       "list_bool_params", "exp_params", "string_params", "special_params"]
@@ -106,7 +106,13 @@ class VaspCalculation:
             vasp_kwargs = merge(calc_kwargs, output_kwargs, **kwargs)
             self.calculator, _ = vasp(launch, self.atoms, **vasp_kwargs)
 
-    def write_input(self, directory: str = os.getcwd(), **kwargs):
+    def write_input(self, directory: str = os.getcwd(), **kwargs) -> NoReturn:
+        """
+        Writes the input files the {directory}. {kwargs} are forwarded to the `ase.calculators.vasp.Vasp` constructor.
+
+        :param directory: the directory to write the input files to (default is `os.getcwd()`)
+        :type directory: str
+        """
         calc_kwargs = dict(kpts=self.kpts, xc=self.xc, setups=self.potcar, incar=self.incar,
                            gamma=self.gamma_centered)
         _ = vasp(write_input, self.atoms, **merge(calc_kwargs, dict(directory=directory), **kwargs))
@@ -115,13 +121,33 @@ class VaspCalculation:
 class GpawCalculation:
 
     def __init__(self, atoms: Atoms, kpts: Any = (1, 1, 1), xc: str = "PBE", **kwargs):
+        """
+        Initializes a GpawCalculation
+
+        :param atoms: structure to compute
+        :type atoms: ase.Atoms
+        :param kpts: k-points object. {kpts} is passed on to the GPAW calculator constructor
+        :param xc: the name of the XC functional to use (default is "PBE")
+        :type xc: str
+        :param kwargs: the keyword-arguments are forwarded to the GPAW calculator constructor
+        """
         self.atoms = atoms
         self._input_parameters: Dict[str, Any] = merge(dict(kpts=kpts, xc=xc), **kwargs)
         self.calculator: Optional[GPAW] = None
 
     @requires("gpaw")
-    def set(self, *remove, **kwargs):
-        tmp_parameters = merge(self._input_parameters, **kwargs)
+    def set(self, *remove:  str, **parameters) -> GpawCalculation:
+        """
+        set or remove parameter for a GPAW calculation. A parameter check is carried out with the new parameters, and
+        an eventual exception if forwarded
+
+        :param remove: parameters to remove
+        :type remove: str
+        :param parameters: name and value of the parameters for the GPAW calculation
+        :return: calculation instance
+        :rtype: GpawCalculation
+        """
+        tmp_parameters = merge(self._input_parameters, **parameters)
         for key in remove:
             if key in tmp_parameters:
                 del tmp_parameters[key]
@@ -135,7 +161,18 @@ class GpawCalculation:
             return self
 
     @requires("gpaw")
-    def run(self, directory: Optional[str] = None, ncpus: int = 2, output: str = '-', **kwargs):
+    def run(self, directory: Optional[str] = None, ncpus: int = 2, output: str | TextIO = '-', **kwargs) -> NoReturn:
+        """
+        Executes the GPAW calculation.
+
+        :param directory: the directory where the GPAW will be executed (default is `None`)
+        :type directory: Optional[str]
+        :param ncpus: number of threads (default is 2)
+        :type ncpus: int
+        :param output: redirection for the GPAW's output. "-" means stdout. Might be a filename of file object
+            (default is "-")
+        :type output: str | TextIO
+        """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
 
         with directory_context as wd:
@@ -151,19 +188,50 @@ class MDCalculation:
     _calculator: Optional[Calculator] = dataclasses.field(default=None)
     _dynamics: Optional[MolecularDynamics] = dataclasses.field(default=None)
 
-    def set(self, f, *args, **kwargs):
-        f(self.atoms, *args, **kwargs)
+    def set(self, func, *args, **kwargs) -> MDCalculation:
+        """
+        Calls {func} and passes {atoms} as the first argument. Syntactic sugar for `func(self.atoms, *args, **kwargs)`.
+
+        :param func: class of function to call
+        :type func: Callable[[ase.Atoms, ...], NoReturn]
+        :return: the calculation instance
+        :rtype: MDCalculation
+        """
+        func(self.atoms, *args, **kwargs)
         return self
 
-    def dynamics(self, dynamics, *args, **kwargs):
-        if self._calculator is None:
+    @requires("kimpy")
+    def dynamics(self, dynamics, *args, **kwargs) -> MDCalculation:
+        """
+        Calls {dynamics} and passes {atoms} as the first argument. Syntactic sugar for
+        `dynamics(self.atoms, *args, **kwargs)`. Furthermore, it will set the internal dynamics object
+
+        :param dynamics: class of function to call
+        :type dynamics: Callable[[ase.Atoms, ...], NoReturn]
+        :return: the calculation instance
+        :rtype: MDCalculation
+        """
+        if self.calculator is None:
             from ase.calculators.kim import KIM
             self._calculator = KIM(self.model)
             self.atoms.calc = self._calculator
         self._dynamics = dynamics(self.atoms, *args, **kwargs)
         return self
 
-    def attach(self, f: Callable[[Atoms, ParamSpecKwargs], NoReturn], interval: int = 50, pass_atoms: bool = False):
+    def attach(self, f: Callable[[Atoms, ParamSpecKwargs], NoReturn], interval: int = 50, pass_atoms: bool = False) -> MDCalculation:
+        """
+        Is a shortcut to `self._dynamics.attach(f)`. Is used to add callback functions. If {pass_atoms} is `True`
+        {self.atoms} and {self._dynamics} will be passed to {f}
+
+        :param f: class of function to call
+        :type f: Callable[[ase.Atoms, ...], NoReturn]
+        :param interval: number of steps after which {f} will be called
+        :type interval: int
+        :param pass_atoms: flag whether to pass the `ase.Atoms` and {dynamics} object to {f} (default is `False`)
+        :type pass_atoms: bool
+        :return: the calculation instance
+        :rtype: MDCalculation
+        """
         if self._dynamics is None:
             raise ValueError("No dynamics was defined for the MD calculation yet. "
                              "Use e.g. calculation.dynamics(Langevin, 5) to set the dynamics.")
