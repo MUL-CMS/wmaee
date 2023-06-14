@@ -1,5 +1,6 @@
-import abc
+
 import os
+import abc
 import tempfile
 import contextlib
 import dataclasses
@@ -13,7 +14,7 @@ from ase.calculators.calculator import Calculator
 
 from wmaee.core.utils import merge
 from wmaee.core.interfaces.requirements import requires
-from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw
+from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator
 
 Incar = Potcar = frozendict
 VaspCalculation = TypeVar("VaspCalculation")
@@ -198,16 +199,42 @@ class GpawCalculation(AtomsAndCalculatorProxy):
         """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
         with directory_context as wd:
-            output_kwargs = dict(ncpus=ncpus, output=output, directory=wd)
-            gpaw_kwargs = merge(self._input_parameters, output_kwargs, **kwargs)
-            self.calculator, _ = gpaw(launch, self.atoms, **gpaw_kwargs)
+            if self.calculator is not None:
+                output_kwargs = dict(ncpus=ncpus, output=output, directory=wd)
+                gpaw_kwargs = merge(self._input_parameters, output_kwargs, **kwargs)
+                self.calculator, _ = gpaw(launch, self.atoms, **gpaw_kwargs)
+            else:
+                launch(self.calculator, self.atoms)
 
-    def __getattr__(self, item):
-        nothing = Nothing()
-        result = self.__dict__.get(item, nothing)
-        lookups = [self.atoms] + ([self.calculator] if self.calculator is not None else [])
-        return get_item(item, self.atoms, *lookups) if result is nothing else result
+    @requires("gpaw")
+    def save(self, filename: str, mode: str = "") -> NoReturn:
+        """
+        Write the results of the calculation into a file. Traditionally it ends on .gpw.
 
+        :param filename: the filename to write it to
+        :type filename: str
+        :param mode: if set to "all" wave functions will be included (default is "")
+        :type mode: str
+        """
+        if self.calculator is None:
+            raise RuntimeError("The calculation was not yet executed. Please call calculation.run() before saving it")
+        self.calculator.write(filename, mode)
+
+    @classmethod
+    @requires("gpaw")
+    def from_file(cls, filename: str) -> GpawCalculation:
+         """
+         Construct a GpawCalculation object from a file. Traditionally these files end with .gpw
+
+         :param filename: the file to read from
+         """
+
+         calculator, _ = gpaw(construct_calculator, None, kpts=None, prefix="-", mode=None, xc=None, output=os.devnull)
+         calculator.read(filename)
+         calculation = GpawCalculation(calculator.atoms, kpts=None, xc=calculator.get_xc_functional())
+         calculation.calculator = calculator
+         calculation.atoms.calc = calculator
+         return calculation
 
 @dataclasses.dataclass
 class MDCalculation(AtomsAndCalculatorProxy):
