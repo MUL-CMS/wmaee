@@ -1,4 +1,4 @@
-
+import abc
 import os
 import tempfile
 import contextlib
@@ -17,11 +17,35 @@ from wmaee.core.interfaces.runners import vasp, launch, write_input, read_result
 
 Incar = Potcar = frozendict
 VaspCalculation = TypeVar("VaspCalculation")
+GpawCalculation = TypeVar("GpawCalculation")
+MDCalculation = TypeVar("MDCalculation")
 GPAW = TypeVar("GPAW")
 
 
+class Nothing:
+    pass
+
+
+def get_item(item: Any, *objects) -> Any:
+    nothing = Nothing()
+    for obj in objects:
+        result = getattr(obj, item, nothing)
+        if result is not nothing:
+            return result
+    raise AttributeError(item)
+
+
+class AtomsAndCalculatorProxy(abc.ABC):
+
+    def __getattr__(self, item):
+        nothing = Nothing()
+        result = self.__dict__.get(item, nothing)
+        lookups = [self.atoms] + ([self.calculator] if self.calculator is not None else [])
+        return get_item(item, self.atoms, *lookups) if result is nothing else result
+
+
 @dataclasses.dataclass
-class VaspCalculation:
+class VaspCalculation(AtomsAndCalculatorProxy):
     """
     Interface to execute VASP calculations via `ase.calculators.vasp.Vasp`, with improved code semantics
     An example to use this class reads
@@ -98,7 +122,6 @@ class VaspCalculation:
         :type output: str | TextIO
         """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
-
         with directory_context as wd:
             calc_kwargs = dict(kpts=self.kpts, xc=self.xc, setups=self.potcar, incar=self.incar,
                                gamma=self.gamma_centered)
@@ -118,7 +141,7 @@ class VaspCalculation:
         _ = vasp(write_input, self.atoms, **merge(calc_kwargs, dict(directory=directory), **kwargs))
 
 
-class GpawCalculation:
+class GpawCalculation(AtomsAndCalculatorProxy):
 
     def __init__(self, atoms: Atoms, kpts: Any = (1, 1, 1), xc: str = "PBE", **kwargs):
         """
@@ -174,18 +197,23 @@ class GpawCalculation:
         :type output: str | TextIO
         """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
-
         with directory_context as wd:
             output_kwargs = dict(ncpus=ncpus, output=output, directory=wd)
             gpaw_kwargs = merge(self._input_parameters, output_kwargs, **kwargs)
             self.calculator, _ = gpaw(launch, self.atoms, **gpaw_kwargs)
 
+    def __getattr__(self, item):
+        nothing = Nothing()
+        result = self.__dict__.get(item, nothing)
+        lookups = [self.atoms] + ([self.calculator] if self.calculator is not None else [])
+        return get_item(item, self.atoms, *lookups) if result is nothing else result
+
 
 @dataclasses.dataclass
-class MDCalculation:
+class MDCalculation(AtomsAndCalculatorProxy):
     atoms: Atoms
     model: str
-    _calculator: Optional[Calculator] = dataclasses.field(default=None)
+    calculator: Optional[Calculator] = dataclasses.field(default=None)
     _dynamics: Optional[MolecularDynamics] = dataclasses.field(default=None)
 
     def set(self, func, *args, **kwargs) -> MDCalculation:
@@ -213,8 +241,8 @@ class MDCalculation:
         """
         if self.calculator is None:
             from ase.calculators.kim import KIM
-            self._calculator = KIM(self.model)
-            self.atoms.calc = self._calculator
+            self.calculator = KIM(self.model)
+            self.atoms.calc = self.calculator
         self._dynamics = dynamics(self.atoms, *args, **kwargs)
         return self
 
