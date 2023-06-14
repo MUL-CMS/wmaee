@@ -236,6 +236,7 @@ class GpawCalculation(AtomsAndCalculatorProxy):
          calculation.atoms.calc = calculator
          return calculation
 
+
 @dataclasses.dataclass
 class MDCalculation(AtomsAndCalculatorProxy):
     atoms: Atoms
