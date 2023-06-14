@@ -74,6 +74,15 @@ def gpaw(action: Command, atoms: Atoms, kpts=GAMMA_POINT, mode: Optional[Any] = 
 
 
 def read_results_vasp(directory: str = os.getcwd(), **kwargs) -> Tuple[Vasp, Atoms]:
+    """
+    Create a `ase.calculator.vasp.Vasp` instance, by reading the contents of {directory}
+
+    :param directory: the directory to read from
+    :type directory: str
+    :param kwargs: are forwarded to `ase.calculator.vasp.Vasp` constructor
+    :return: the `ase.calculator.vasp.Vasp` calculator instance and the `ase.Atom` object
+    :rtype: Tuple[Vasp, Atoms]:
+    """
     calculator = Vasp(directory=directory, restart=True, **kwargs)
     calculator.read_results()
     return calculator, calculator.get_atoms()
