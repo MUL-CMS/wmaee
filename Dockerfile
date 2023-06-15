@@ -24,7 +24,8 @@ RUN mamba install --yes -c conda-forge \
     'frozendict' \
     'kim-query' \
     'kimpy' \
-    'nglview' && \
+    'nglview' \
+    'sympy' && \
     mamba clean --all -f -y
 
 
