@@ -25,6 +25,7 @@ RUN mamba install --yes -c conda-forge \
     'kim-query' \
     'kimpy' \
     'nglview' \
+    'tqdm' \
     'sympy' && \
     mamba clean --all -f -y
 
