@@ -11,8 +11,9 @@ from ase import Atoms
 from ase.calculators.vasp import Vasp
 from ase.md.md import MolecularDynamics
 from ase.calculators.calculator import Calculator
+from ase.io.trajectory import TrajectoryReader, TrajectoryWriter
 
-from wmaee.core.utils import merge
+from wmaee.core.utils import merge, override_environ
 from wmaee.core.interfaces.requirements import requires
 from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator
 
@@ -228,7 +229,6 @@ class GpawCalculation(AtomsAndCalculatorProxy):
 
          :param filename: the file to read from
          """
-
          calculator, _ = gpaw(construct_calculator, None, kpts=None, prefix="-", mode=None, xc=None, output=os.devnull)
          calculator.read(filename)
          calculation = GpawCalculation(calculator.atoms, kpts=None, xc=calculator.get_xc_functional())
@@ -243,6 +243,9 @@ class MDCalculation(AtomsAndCalculatorProxy):
     model: str
     calculator: Optional[Calculator] = dataclasses.field(default=None)
     _dynamics: Optional[MolecularDynamics] = dataclasses.field(default=None)
+    _filename: Optional[str] = dataclasses.field(default=None)
+    _dump_interval: int = dataclasses.field(default=10)
+    _trajectory_reader: Optional[TrajectoryReader] = dataclasses.field(default=None)
 
     def set(self, func, *args, **kwargs) -> MDCalculation:
         """
@@ -269,10 +272,27 @@ class MDCalculation(AtomsAndCalculatorProxy):
         """
         if self.calculator is None:
             from ase.calculators.kim import KIM
-            self.calculator = KIM(self.model)
+            self.calculator = KIM(self.model, options=dict(release_GIL=True))
             self.atoms.calc = self.calculator
         self._dynamics = dynamics(self.atoms, *args, **kwargs)
         return self
+
+    def dump(self, filename: str, interval: int = 10) -> MDCalculation:
+        if self._dynamics is None:
+            raise RuntimeError("No dynamics was set yet. Use calculation.dynamics(...) before setting the dump")
+        self._filename = filename
+        self._dump_interval = interval
+        return self
+
+    def get_trajectory(self):
+        if self._filename is None:
+            raise RuntimeError("No trajectory filename was set")
+        elif self._dynamics is None:
+            raise RuntimeError("The calculation was not computed yet. Please calc calculation.run()")
+        elif self._trajectory_reader is None:
+            assert self._filename is not None
+            self._trajectory_reader = TrajectoryReader(self._filename)
+        return self._trajectory_reader
 
     def attach(self, f: Callable[[Atoms, ParamSpecKwargs], NoReturn], interval: int = 50, pass_atoms: bool = False) -> MDCalculation:
         """
@@ -295,9 +315,14 @@ class MDCalculation(AtomsAndCalculatorProxy):
         return self
 
     @requires("kimpy")
-    def run(self, *args, **kwargs):
+    def run(self, *args, ncpus: int = 2, **kwargs):
         if self._dynamics is None:
             raise ValueError("No dynamics was defined for the MD calculation yet. "
                              "Use e.g. calculation.dynamics(Langevin, 5) to set the dynamics.")
-        self._dynamics.run(*args, **kwargs)
+        with override_environ(OMP_NUM_THREADS=f"{ncpus}"):
+            trajectory_context = TrajectoryWriter(self._filename, atoms=self.atoms) if self._filename is not None else contextlib.nullcontext(None)
+            with trajectory_context as trajectory:
+                if trajectory is not None:
+                    self.attach(trajectory.write, interval=self._dump_interval)
+                self._dynamics.run(*args, **kwargs)
         return self
