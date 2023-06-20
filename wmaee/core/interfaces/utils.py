@@ -7,7 +7,7 @@ from jinja2 import Template
 from frozendict import frozendict
 from wmaee.core.utils import ensure_iterable
 from wmaee.core.interfaces.requirements import requires
-from typing import Optional, Any, List, Type, Callable, NoReturn
+from typing import Optional, Any, List, Type, Callable, NoReturn, Union
 
 
 def load_config(path: Optional[str] = None) -> frozendict:
@@ -80,8 +80,8 @@ def render_command(application: str, **kwargs: Any) -> str:
 
 
 @requires("kim_query")
-def available_models(atoms: Atoms, species_logic: str | List[str] = "and", model_interface: str | List[str] = "any",
-                     potential_type: str | List[str] = "any", simulator_name: str | List[str] = "any") -> List[str]:
+def available_models(atoms: Atoms, species_logic: Union[str, List[str]] = "and", model_interface: Union[str, List[str]] = "any",
+                     potential_type: Union[str, List[str]] = "any", simulator_name: Union[str, List[str]] = "any") -> List[str]:
     """
     Query the KIM online API for available potentials that might be used for {atoms}
 
@@ -89,15 +89,15 @@ def available_models(atoms: Atoms, species_logic: str | List[str] = "and", model
     :type atoms: ase.Atoms
     :param species_logic: reduction operation if {atoms} contains more than one species. Allowed choices are "and" and
         "or". (default is "and")
-    :type species_logic: str | List[str]
+    :type species_logic: Union[str, List[str]]
     :param model_interface: model interface to select. Allowed choices are "sm" = Simulator Model, which refers to
         models bound to a specific MD code. "pm" = Portable Model(s) might be used with and MD code, and "any" if it
         does not matter (default is "any")
-    :type model_interface: str | List[str]
+    :type model_interface: Union[str, List[str]]
     :param potential_type: the name or a list of names for potential types E.g. "meam", "eam" etc. (default is "any")
-    :type potential_type: str | List[str]
+    :type potential_type: Union[str, List[str]]
     :param simulator_name: the name of a list of simulator names. E.g. "LAMMPS" (default is "any")
-    :type simulator_name: str | List[str]
+    :type simulator_name: Union[str, List[str]]
     :return: a list of available model names
     :rtype: List[str]
     """
