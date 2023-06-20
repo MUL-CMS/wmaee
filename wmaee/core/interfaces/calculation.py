@@ -1,11 +1,12 @@
 
 import os
 import abc
+import sys
 import tempfile
 import contextlib
 import dataclasses
 from frozendict import frozendict
-from typing import Any, TypeVar, Optional, Dict, Callable, NoReturn, ParamSpecKwargs, TextIO
+from typing import Any, TypeVar, Optional, Dict, Callable, NoReturn, TextIO, Union
 
 from ase import Atoms
 from ase.calculators.vasp import Vasp
@@ -13,14 +14,17 @@ from ase.md.md import MolecularDynamics
 from ase.calculators.calculator import Calculator
 from ase.io.trajectory import TrajectoryReader, TrajectoryWriter
 
+from wmaee.units import HARTREE_TO_EV
 from wmaee.core.utils import merge, override_environ
 from wmaee.core.interfaces.requirements import requires
-from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator
+from wmaee.core.interfaces.abinit import parse_abinit_input
+from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit
 
 Incar = Potcar = frozendict
+MDCalculation = TypeVar("MDCalculation")
 VaspCalculation = TypeVar("VaspCalculation")
 GpawCalculation = TypeVar("GpawCalculation")
-MDCalculation = TypeVar("MDCalculation")
+AbinitCalculation = TypeVar("AbinitCalculation")
 GPAW = TypeVar("GPAW")
 
 
@@ -46,6 +50,72 @@ class AtomsAndCalculatorProxy(abc.ABC):
         return get_item(item, self.atoms, *lookups) if result is nothing else result
 
 
+class AbinitCalculation(AtomsAndCalculatorProxy):
+
+    def __init__(self, atoms: Atoms, kpts=(1, 1, 1), ecut: float = 400 , pps: str = "fhi", xc: str = "GGA", ixc: int = 11, prefix: Optional[str] = None, toldfe: float = 1e-4, **kwargs):
+        self.atoms = atoms
+        self.kpts = kpts
+        self.pps = pps
+        self.xc = xc
+        self.prefix = self.atoms.get_chemical_formula() if prefix is None else prefix
+        self.kwargs = frozendict(merge(dict(ecut=ecut, toldfe=toldfe, ixc=ixc), kwargs))
+        self.calculator = None
+
+    def set(self, *remove: str, **tags) -> AbinitCalculation:
+        new_kwargs = dict(self.kwargs, **tags)
+        for removal in remove:
+            if removal in new_kwargs:
+                del new_kwargs[removal]
+        self.kwargs = frozendict(new_kwargs)
+        return self
+
+    def run(self, directory: Optional[str] = None, ncpus: int = 2, output: Union[str, TextIO] = '-', **kwargs) -> NoReturn:
+        """
+        Run the AbinitCalculation instance. If {directory} is not None a temporary directory will be created.
+
+        :param directory: the directory where the VASP code will be executed (default is `None`)
+        :type directory: Optional[str]
+        :param ncpus: number of MPI ranks (default is 2)
+        :type ncpus: int
+        :param output: redirection for the Abinit's output. "-" means stdout. Might be a filename of file object
+            (default is "-")
+        :type output: str | TextIO
+        """
+        directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
+        if output == '-':
+            output_file = sys.stdout
+        elif isinstance(output, str):
+            output_file = open(output)
+        else:
+            output_file = output
+
+        with directory_context as wd:
+            calc_kwargs = dict(kpts=self.kpts, xc=self.xc, pps=self.pps)
+            output_kwargs = dict(ncpus=ncpus, directory=wd)
+            abinit_kwargs = merge(calc_kwargs, output_kwargs, self.kwargs, kwargs)
+            with contextlib.redirect_stdout(output_file):
+                self.calculator, _ = abinit(launch, self.atoms, **abinit_kwargs)
+
+    @classmethod
+    def from_directory(cls, path: str = os.getcwd(), prefix: Optional[str] = None, **kwargs) -> AbinitCalculation:
+        if prefix is None:
+            root, _, files = next(os.walk(path, topdown=True))
+            files = set(files)
+            input_file = next((f for f in files if f.endswith(".in")), None)
+            if input_file is None:
+                raise FileNotFoundError(f"No input file found in \"{root}\". Please specify a prefix!")
+            prefix, *_ = input_file.split('.')
+
+        calculator, atoms = read_results_abinit(prefix, directory=path, **kwargs)
+        calculator.atoms = atoms
+
+        input_file_name = os.path.join(path, f"{prefix}.in")
+        kwargs = parse_abinit_input(input_file_name)
+        calculation = cls(atoms, prefix=prefix, **kwargs)
+        calculation.calculator = calculator
+        return calculation
+
+
 @dataclasses.dataclass
 class VaspCalculation(AtomsAndCalculatorProxy):
     """
@@ -65,7 +135,7 @@ class VaspCalculation(AtomsAndCalculatorProxy):
     atoms: Atoms
     incar: frozendict = dataclasses.field(default_factory=Incar)
     kpts: Any = dataclasses.field(default=(1, 1, 1))
-    potcar: frozendict = dataclasses.field(default=frozendict(base="recommended"))
+    potcar: frozendict = dataclasses.field(default_factory=lambda: frozendict(base="recommended"))
     gamma_centered: bool = dataclasses.field(default=True)
     xc: str = dataclasses.field(default="pbe")
     calculator: Optional[Vasp] = dataclasses.field(default=None)
@@ -86,6 +156,7 @@ class VaspCalculation(AtomsAndCalculatorProxy):
                 del new_incar[removal]
         self.incar = frozendict(new_incar)
         return self
+
 
     @classmethod
     def from_directory(cls, path: str = os.getcwd(), **kwargs) -> VaspCalculation:
@@ -109,7 +180,7 @@ class VaspCalculation(AtomsAndCalculatorProxy):
                    gamma_centered=calculator.input_params.get("gamma", False), xc=calculator.get_xc_functional(),
                    calculator=calculator)
 
-    def run(self, directory: Optional[str] = None, ncpus: int = 2, mode: str = "std", output: str | TextIO = '-', **kwargs) -> NoReturn:
+    def run(self, directory: Optional[str] = None, ncpus: int = 2, mode: str = "std", output: Union[str, TextIO] = '-', **kwargs) -> NoReturn:
         """
         Run the VaspCalculation instance. If {directory} is not None a temporary directory will be created.
 
@@ -186,7 +257,7 @@ class GpawCalculation(AtomsAndCalculatorProxy):
             return self
 
     @requires("gpaw")
-    def run(self, directory: Optional[str] = None, ncpus: int = 2, output: str | TextIO = '-', **kwargs) -> NoReturn:
+    def run(self, directory: Optional[str] = None, ncpus: int = 2, output: Union[str, TextIO] = '-', **kwargs) -> NoReturn:
         """
         Executes the GPAW calculation.
 
@@ -200,7 +271,7 @@ class GpawCalculation(AtomsAndCalculatorProxy):
         """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
         with directory_context as wd:
-            if self.calculator is not None:
+            if self.calculator is None:
                 output_kwargs = dict(ncpus=ncpus, output=output, directory=wd)
                 gpaw_kwargs = merge(self._input_parameters, output_kwargs, **kwargs)
                 self.calculator, _ = gpaw(launch, self.atoms, **gpaw_kwargs)
@@ -294,7 +365,7 @@ class MDCalculation(AtomsAndCalculatorProxy):
             self._trajectory_reader = TrajectoryReader(self._filename)
         return self._trajectory_reader
 
-    def attach(self, f: Callable[[Atoms, ParamSpecKwargs], NoReturn], interval: int = 50, pass_atoms: bool = False) -> MDCalculation:
+    def attach(self, f: Callable[[Atoms], NoReturn], interval: int = 50, pass_atoms: bool = False) -> MDCalculation:
         """
         Is a shortcut to `self._dynamics.attach(f)`. Is used to add callback functions. If {pass_atoms} is `True`
         {self.atoms} and {self._dynamics} will be passed to {f}

@@ -1,18 +1,29 @@
 
+import re
 import os
 from frozendict import frozendict
-from typing import Optional, Any, Callable, Dict, Tuple
+from typing import Optional, Any, Callable, Dict, Tuple, Iterable
 
 from ase import Atoms
 from ase.calculators.vasp import Vasp
-from ase.dft.kpoints import monkhorst_pack
+from ase.calculators.abinit import Abinit
 from ase.calculators.calculator import Calculator, all_changes
 
-from wmaee.core.utils import override_environ
 from wmaee.core.interfaces.requirements import requires
 from wmaee.core.interfaces.utils import Config, render_command
+from wmaee.core.utils import override_environ, working_directory
 
-GAMMA_POINT = monkhorst_pack((1,1,1))
+GAMMA_POINT = (1, 1, 1)
+
+
+
+ABI_UNIT_NAMES = {
+    s.lower() for s in (
+        "au", "nm",
+        "Angstr", "Angstrom", "Angstroms", "Bohr", "Bohrs",
+        "eV", "Ha", "Hartree", "Hartrees", "K", "Ry", "Rydberg", "Rydbergs",
+        "T", "Tesla",)
+}
 
 Command = Callable[[Calculator, Atoms], Any]
 
@@ -45,6 +56,20 @@ def vasp(action: Command, atoms: Atoms, kpts=GAMMA_POINT, xc="pbe", directory: s
         )
         calculator.set(**{incar_key.lower(): value for incar_key, value in incar.items()})
         return action(calculator, atoms)
+
+
+def abinit(action: Command, atoms: Atoms, kpts=GAMMA_POINT, pps: str = "fhi", xc: str = "LDA", ncpus: int = 2, prefix: Optional[str] = None,  output: str = '-', directory: str = os.getcwd(), **kwargs):
+    prefix = atoms.get_chemical_formula() if prefix is None else prefix
+    command = render_command("abinit", ncpus=ncpus, prefix=prefix)
+    pseudo_potential_directory = Config().get("applications").get("abinit").get("potential_path")
+    subdirectories = frozenset({"LDA_FHI", "GGA_FHI", "LDA_HGH", "LDA_PAW", "LDA_TM", "GGA_FHI", "GGA_HGHK", "GGA_PAW"})
+    pseudo_potential_path = ":".join(os.path.join(pseudo_potential_directory, subdir) for subdir in subdirectories)
+    with override_environ(ABINIT_PP_PATH=pseudo_potential_path, ASE_ABINIT_COMMAND=command):
+        from ase.calculators.abinit import Abinit
+        return action(
+            Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs),
+            atoms
+        )
 
 
 @requires("gpaw")
@@ -86,5 +111,28 @@ def read_results_vasp(directory: str = os.getcwd(), **kwargs) -> Tuple[Vasp, Ato
     calculator = Vasp(directory=directory, restart=True, **kwargs)
     calculator.read_results()
     return calculator, calculator.get_atoms()
+
+
+def read_results_abinit(prefix: str, directory: str = os.getcwd(), **kwargs) -> Tuple[Abinit, Atoms]:
+    """
+    Create a `ase.calculators.abinit.Abinit` instance, by reading the contents of {directory}
+
+    :param prefix: abinit prefix for the Abinit input and output files
+    :type prefix: str
+    :param directory: the directory to read from
+    :type directory: str
+    :param kwargs: are forwarded to `ase.calculators.abinit.Abinit` constructor
+    :return: the `ase.calculators.abinit.Abinit` calculator instance and the `ase.Atom` object
+    :rtype: Tuple[Abinit, Atoms]:
+    """
+
+    with working_directory(directory):
+        calculator = Abinit(directory=directory, restart=prefix, label=prefix, v8_legacy_format=False, **kwargs)
+    calculator.read_results()
+    return calculator, calculator.get_atoms()
+
+
+def parse_abinit_input_file(buffer: Iterable[str]) -> Dict[str, Any]:
+    pass
 
 
