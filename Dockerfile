@@ -14,6 +14,7 @@ RUN apt-get update --yes && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN mamba install --yes -c conda-forge \
+    'abinit' \
     'numpy' \
     'scipy' \
     'matplotlib' \
