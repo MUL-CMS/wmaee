@@ -12,4 +12,9 @@ module load scalapack\n
 mpirun -np {{ NCPUS }} /calc/dnoeger/software/e5-1650/vasp-intel-mpich-mkl/{{ VERSION  }}/bin/vasp_{{ MODE }}"
   gpaw:
     potential_path: /calc/dnoeger/potentials/gpaw/gpaw-setups-0.9.20000
+  abinit:
+    potential_path: /home/dominik/.local/software/abinit/potentials
+    launch:
+      args: ["NCPUS", "PREFIX"]
+      script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
 
