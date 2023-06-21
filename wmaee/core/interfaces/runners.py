@@ -8,7 +8,7 @@ from typing import Optional, Any, Callable, Dict, Tuple, Iterable
 
 from ase import Atoms
 from ase.calculators.vasp import Vasp
-from ase.calculators.abinit import Abinit
+from wmaee.core.interfaces.abinit import Abinit
 from ase.calculators.calculator import Calculator, all_changes
 
 from wmaee.core.interfaces.requirements import requires
@@ -75,9 +75,8 @@ def abinit(action: Command, atoms: Atoms, kpts=GAMMA_POINT, pps: str = "fhi", xc
     pseudo_potential_path = ":".join(os.path.join(pseudo_potential_directory, subdir) for subdir in subdirectories)
 
     with override_environ(ABINIT_PP_PATH=pseudo_potential_path, ASE_ABINIT_COMMAND=command):
-        from ase.calculators.abinit import Abinit
-        calculator = Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs)
-        calculator.output = output
+        from wmaee.core.interfaces.abinit import Abinit
+        calculator = Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, output=output, **kwargs)
         return action(calculator, atoms)
 
 

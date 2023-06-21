@@ -82,7 +82,5 @@ def monkey_patch_abinit_calculator():
     setattr(Abinit, "calculate", _calculate)
 
 
-monkey_patch_abinit_calculator()
-
 __all__ = ["Atoms", "GpawCalculation", "VaspCalculation", "MDCalculation", "UnmetRequirement", "show", "show_traj",
            "available_models", "available_lammps_models", "md", "AbinitCalculation"]
