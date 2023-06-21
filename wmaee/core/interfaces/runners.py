@@ -1,6 +1,8 @@
 
-import re
 import os
+import sys
+import tempfile
+import contextlib
 from frozendict import frozendict
 from typing import Optional, Any, Callable, Dict, Tuple, Iterable
 
@@ -42,12 +44,18 @@ def write_input(c: Calculator, a: Atoms) -> Any:
     return c, a
 
 
-def vasp(action: Command, atoms: Atoms, kpts=GAMMA_POINT, xc="pbe", directory: str = os.getcwd(), ncpus: int = 2,
+def calculate(c: Calculator, a: Atoms) -> Any:
+    c.calculate(a, ("energies",), tuple(all_changes))
+    return c, a
+
+
+def vasp(action: Command, atoms: Atoms, kpts=GAMMA_POINT, xc="pbe", directory: Optional[str] = None, ncpus: int = 2,
          version: str = "6.3.1", mode: str = "std", output: str = '-', setups: Dict = frozendict(base="recommended"),
          incar: Dict[str, Any] = frozendict(), gamma: bool = True, **kwargs):
     command = render_command("vasp", ncpus=ncpus, version=version, mode=mode)
     pseudo_potential_directory = Config().get("applications").get("vasp").get("potential_path")
     # override environment variables according to: https://wiki.fysik.dtu.dk/ase/ase/calculators/vasp.html
+    directory = os.getcwd() if directory is None else directory
     with override_environ(VASP_PP_PATH=pseudo_potential_directory):
         from ase.calculators.vasp import Vasp
         calculator = Vasp(
@@ -58,18 +66,28 @@ def vasp(action: Command, atoms: Atoms, kpts=GAMMA_POINT, xc="pbe", directory: s
         return action(calculator, atoms)
 
 
-def abinit(action: Command, atoms: Atoms, kpts=GAMMA_POINT, pps: str = "fhi", xc: str = "LDA", ncpus: int = 2, prefix: Optional[str] = None,  output: str = '-', directory: str = os.getcwd(), **kwargs):
+def abinit(action: Command, atoms: Atoms, kpts=GAMMA_POINT, pps: str = "fhi", xc: str = "LDA", ncpus: int = 2, prefix: Optional[str] = None,  output: str = '-', directory: Optional[str] = None, **kwargs):
+    directory = os.getcwd() if directory is None else directory
     prefix = atoms.get_chemical_formula() if prefix is None else prefix
     command = render_command("abinit", ncpus=ncpus, prefix=prefix)
     pseudo_potential_directory = Config().get("applications").get("abinit").get("potential_path")
     subdirectories = frozenset({"LDA_FHI", "GGA_FHI", "LDA_HGH", "LDA_PAW", "LDA_TM", "GGA_FHI", "GGA_HGHK", "GGA_PAW"})
     pseudo_potential_path = ":".join(os.path.join(pseudo_potential_directory, subdir) for subdir in subdirectories)
+
+    if output == '-':
+        output_file = sys.stdout
+    elif isinstance(output, str):
+        output_file = open(output)
+    else:
+        output_file = output
+
     with override_environ(ABINIT_PP_PATH=pseudo_potential_path, ASE_ABINIT_COMMAND=command):
         from ase.calculators.abinit import Abinit
-        return action(
-            Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs),
-            atoms
-        )
+        with contextlib.redirect_stdout(output_file):
+            return action(
+                Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs),
+                atoms
+            )
 
 
 @requires("gpaw")
@@ -130,9 +148,4 @@ def read_results_abinit(prefix: str, directory: str = os.getcwd(), **kwargs) -> 
         calculator = Abinit(directory=directory, restart=prefix, label=prefix, v8_legacy_format=False, **kwargs)
     calculator.read_results()
     return calculator, calculator.get_atoms()
-
-
-def parse_abinit_input_file(buffer: Iterable[str]) -> Dict[str, Any]:
-    pass
-
 

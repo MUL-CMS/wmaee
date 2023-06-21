@@ -18,7 +18,7 @@ from wmaee.units import HARTREE_TO_EV
 from wmaee.core.utils import merge, override_environ
 from wmaee.core.interfaces.requirements import requires
 from wmaee.core.interfaces.abinit import parse_abinit_input
-from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit
+from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit, calculate
 
 Incar = Potcar = frozendict
 MDCalculation = TypeVar("MDCalculation")
@@ -52,16 +52,25 @@ class AtomsAndCalculatorProxy(abc.ABC):
 
 class AbinitCalculation(AtomsAndCalculatorProxy):
 
-    def __init__(self, atoms: Atoms, kpts=(1, 1, 1), ecut: float = 400 , pps: str = "fhi", xc: str = "GGA", ixc: int = 11, prefix: Optional[str] = None, toldfe: float = 1e-4, **kwargs):
+    def __init__(self, atoms: Atoms, kpts=(1, 1, 1), ecut: float = 400, pps: str = "fhi", xc: str = "GGA", ixc: int = 11, prefix: Optional[str] = None, toldfe: float = 1e-4, **kwargs):
         self.atoms = atoms
         self.kpts = kpts
         self.pps = pps
         self.xc = xc
         self.prefix = self.atoms.get_chemical_formula() if prefix is None else prefix
-        self.kwargs = frozendict(merge(dict(ecut=ecut, toldfe=toldfe, ixc=ixc), kwargs))
+        self.kwargs = frozendict(merge(dict(ecut=ecut, toldfe=toldfe, ixc=ixc, pps=pps, xc=xc), kwargs))
         self.calculator = None
 
     def set(self, *remove: str, **tags) -> AbinitCalculation:
+        """
+        set keyword arguments, override them or remove them
+
+        :param remove: keyword argument to remove
+        :type remove: str
+        :param tags: keyword argument to set or override
+        :return: calculation instance
+        :rtype: VaspCalculation
+        """
         new_kwargs = dict(self.kwargs, **tags)
         for removal in remove:
             if removal in new_kwargs:
@@ -71,9 +80,9 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
 
     def run(self, directory: Optional[str] = None, ncpus: int = 2, output: Union[str, TextIO] = '-', **kwargs) -> NoReturn:
         """
-        Run the AbinitCalculation instance. If {directory} is not None a temporary directory will be created.
+        Run the AbinitCalculation instance. If {directory} is not `None` a temporary directory will be created.
 
-        :param directory: the directory where the VASP code will be executed (default is `None`)
+        :param directory: the directory where the Abinit will be executed (default is `None`)
         :type directory: Optional[str]
         :param ncpus: number of MPI ranks (default is 2)
         :type ncpus: int
@@ -82,22 +91,15 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
         :type output: str | TextIO
         """
         directory_context = tempfile.TemporaryDirectory() if directory is None else contextlib.nullcontext(directory)
-        if output == '-':
-            output_file = sys.stdout
-        elif isinstance(output, str):
-            output_file = open(output)
-        else:
-            output_file = output
-
         with directory_context as wd:
-            calc_kwargs = dict(kpts=self.kpts, xc=self.xc, pps=self.pps)
-            output_kwargs = dict(ncpus=ncpus, directory=wd)
-            abinit_kwargs = merge(calc_kwargs, output_kwargs, self.kwargs, kwargs)
-            with contextlib.redirect_stdout(output_file):
-                self.calculator, _ = abinit(launch, self.atoms, **abinit_kwargs)
+            output_kwargs = dict(ncpus=ncpus, directory=wd, output=output)
+            abinit_kwargs = merge(output_kwargs, self.kwargs, kwargs)
+            action = launch if self.calculator is None else calculate
+            self.calculator, _ = abinit(action, self.atoms, kpts=self.kpts, **abinit_kwargs)
 
     @classmethod
-    def from_directory(cls, path: str = os.getcwd(), prefix: Optional[str] = None, **kwargs) -> AbinitCalculation:
+    def from_directory(cls, path: Optional[str] = None, prefix: Optional[str] = None, **kwargs) -> AbinitCalculation:
+        path = os.getcwd() if path is None else path
         if prefix is None:
             root, _, files = next(os.walk(path, topdown=True))
             files = set(files)
@@ -114,6 +116,19 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
         calculation = cls(atoms, prefix=prefix, **kwargs)
         calculation.calculator = calculator
         return calculation
+
+    def write_input(self, directory: Optional[str] = None, **kwargs) -> NoReturn:
+        """
+        Writes the input files the {directory}. {kwargs} are forwarded to the `ase.calculators.abinit.Abinit` constructor.
+
+        :param directory: the directory to write the input files to (default is `os.getcwd()`)
+        :type directory: str
+        """
+        directory = os.getcwd() if directory is None else directory
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        abinit_kwargs = merge(self.kwargs, kwargs)
+        self.calculator, _ = abinit(write_input, self.atoms, directory=directory, kpts=self.kpts, **abinit_kwargs)
 
 
 @dataclasses.dataclass
@@ -157,9 +172,8 @@ class VaspCalculation(AtomsAndCalculatorProxy):
         self.incar = frozendict(new_incar)
         return self
 
-
     @classmethod
-    def from_directory(cls, path: str = os.getcwd(), **kwargs) -> VaspCalculation:
+    def from_directory(cls, path: Optional[str] = None, **kwargs) -> VaspCalculation:
         """
         Create a VaspCalculation instance from a folder which contains VASP input files
 
@@ -169,6 +183,7 @@ class VaspCalculation(AtomsAndCalculatorProxy):
         :return: calculation instance
         :retype: VaspCalculation
         """
+        path = os.getcwd() if path is None else path
         calculator, atoms = read_results_vasp(directory=path, **kwargs)
         # the VASP calculator class splits up the INCAR tags and gathers them in several different variables.
         # the names of these variables depend on the data type of the INCAR tags' value.
@@ -200,18 +215,20 @@ class VaspCalculation(AtomsAndCalculatorProxy):
                                gamma=self.gamma_centered)
             output_kwargs = dict(ncpus=ncpus, output=output, mode=mode, directory=wd)
             vasp_kwargs = merge(calc_kwargs, output_kwargs, **kwargs)
-            self.calculator, _ = vasp(launch, self.atoms, **vasp_kwargs)
+            action = launch if self.calculator is None else calculate
+            self.calculator, _ = vasp(action, self.atoms, **vasp_kwargs)
 
-    def write_input(self, directory: str = os.getcwd(), **kwargs) -> NoReturn:
+    def write_input(self, directory: Optional[str] = None, **kwargs) -> NoReturn:
         """
         Writes the input files the {directory}. {kwargs} are forwarded to the `ase.calculators.vasp.Vasp` constructor.
 
         :param directory: the directory to write the input files to (default is `os.getcwd()`)
         :type directory: str
         """
+        directory = os.getcwd() if directory is None else directory
         calc_kwargs = dict(kpts=self.kpts, xc=self.xc, setups=self.potcar, incar=self.incar,
                            gamma=self.gamma_centered)
-        _ = vasp(write_input, self.atoms, **merge(calc_kwargs, dict(directory=directory), **kwargs))
+        self.calculator, _ = vasp(write_input, self.atoms, **merge(calc_kwargs, dict(directory=directory), **kwargs))
 
 
 class GpawCalculation(AtomsAndCalculatorProxy):
