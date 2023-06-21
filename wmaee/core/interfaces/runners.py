@@ -116,7 +116,7 @@ def gpaw(action: Command, atoms: Atoms, kpts=GAMMA_POINT, mode: Optional[Any] = 
         )
 
 
-def read_results_vasp(directory: str = os.getcwd(), **kwargs) -> Tuple[Vasp, Atoms]:
+def read_results_vasp(directory: Optional[str] = None, **kwargs) -> Tuple[Vasp, Atoms]:
     """
     Create a `ase.calculator.vasp.Vasp` instance, by reading the contents of {directory}
 
@@ -126,12 +126,13 @@ def read_results_vasp(directory: str = os.getcwd(), **kwargs) -> Tuple[Vasp, Ato
     :return: the `ase.calculator.vasp.Vasp` calculator instance and the `ase.Atom` object
     :rtype: Tuple[Vasp, Atoms]:
     """
+    directory = os.getcwd() if directory is None else directory
     calculator = Vasp(directory=directory, restart=True, **kwargs)
     calculator.read_results()
     return calculator, calculator.get_atoms()
 
 
-def read_results_abinit(prefix: str, directory: str = os.getcwd(), **kwargs) -> Tuple[Abinit, Atoms]:
+def read_results_abinit(prefix: str, directory: Optional[str] = None, **kwargs) -> Tuple[Abinit, Atoms]:
     """
     Create a `ase.calculators.abinit.Abinit` instance, by reading the contents of {directory}
 
@@ -144,6 +145,7 @@ def read_results_abinit(prefix: str, directory: str = os.getcwd(), **kwargs) -> 
     :rtype: Tuple[Abinit, Atoms]:
     """
 
+    directory = os.getcwd() if directory is None else directory
     with working_directory(directory):
         calculator = Abinit(directory=directory, restart=prefix, label=prefix, v8_legacy_format=False, **kwargs)
     calculator.read_results()

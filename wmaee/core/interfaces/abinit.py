@@ -62,6 +62,7 @@ ABINIT_KEYS = frozendict(
     nshiftk=(lambda v: dict(nshiftk=int(v.strip())), re.compile(f"({INTEGER_REGEX})")),
     kptopt=(lambda v: dict(kptopt=int(v.strip())), re.compile(f"({INTEGER_REGEX})")),
     nsppol=(lambda v: dict(nsppol=int(v.strip())), re.compile(f"({INTEGER_REGEX})")),
+    ixc=(lambda v: dict(ixc=int(v.strip())), re.compile(f"({INTEGER_REGEX})")),
     ngkpt=(parse_ngkpt, re.compile(rf"({INTEGER_REGEX})\s+({INTEGER_REGEX})\s+({INTEGER_REGEX})")),
     shiftk=(parse_shiftk, re.compile(rf"({FLOAT_REGEX})\s+({FLOAT_REGEX})\s+({FLOAT_REGEX})"))
 )
