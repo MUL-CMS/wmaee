@@ -74,20 +74,11 @@ def abinit(action: Command, atoms: Atoms, kpts=GAMMA_POINT, pps: str = "fhi", xc
     subdirectories = frozenset({"LDA_FHI", "GGA_FHI", "LDA_HGH", "LDA_PAW", "LDA_TM", "GGA_FHI", "GGA_HGHK", "GGA_PAW"})
     pseudo_potential_path = ":".join(os.path.join(pseudo_potential_directory, subdir) for subdir in subdirectories)
 
-    if output == '-':
-        output_file = sys.stdout
-    elif isinstance(output, str):
-        output_file = open(output)
-    else:
-        output_file = output
-
     with override_environ(ABINIT_PP_PATH=pseudo_potential_path, ASE_ABINIT_COMMAND=command):
         from ase.calculators.abinit import Abinit
-        with contextlib.redirect_stdout(output_file):
-            return action(
-                Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs),
-                atoms
-            )
+        calculator = Abinit(atoms=atoms, label=prefix, pps=pps, xc=xc, directory=directory, kpts=kpts, v8_legacy_format=False, **kwargs)
+        calculator.output = output
+        return action(calculator, atoms)
 
 
 @requires("gpaw")
