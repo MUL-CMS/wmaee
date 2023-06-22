@@ -1,9 +1,16 @@
 
+"""
+This code file is the additional "cost" of using Abinit. The ase.calculator.abinit implementation misses many features
+as it has hardcoded parameters
+"""
+
 import io
 import os
 import re
 import sys
 import time
+import warnings
+import ase.units
 import subprocess
 import contextlib
 import numpy as np
@@ -11,6 +18,7 @@ import ase.io.abinit
 from frozendict import frozendict
 from wmaee.core.utils import merge
 from wmaee.units import HARTREE_TO_EV
+from ase.calculators.abinit import Abinit
 from ase.calculators.calculator import FileIOCalculator, CalculationFailed, all_changes, Calculator, CalculatorSetupError, kpts2mp
 from typing import Dict, Tuple, Any, TextIO, Union
 
@@ -117,6 +125,336 @@ def parse_abinit_input(path: Union[str, TextIO]) -> Dict[str, Any]:
         return merge(*parse_file(handle))
 
 
+def _write_abinit_in_(fd, atoms, param=None, species=None, pseudos=None):
+    import copy
+    from ase.calculators.abinit import Abinit
+    from ase.calculators.calculator import kpts2mp
+
+    if param is None:
+        param = {}
+
+    _param = copy.deepcopy(Abinit.default_parameters)
+    _param.update(param)
+    param = _param
+
+    if species is None:
+        species = sorted(set(atoms.numbers))
+
+    inp = {}
+    inp.update(param)
+    for key in ['xc', 'smearing', 'kpts', 'pps', 'raw']:
+        del inp[key]
+
+    smearing = param.get('smearing')
+    if 'tsmear' in param or 'occopt' in param:
+        assert smearing is None
+
+    if smearing is not None:
+        inp['occopt'] = {'fermi-dirac': 3,
+                         'gaussian': 7}[smearing[0].lower()]
+        inp['tsmear'] = smearing[1]
+
+    inp['natom'] = len(atoms)
+
+    if 'nbands' in param:
+        inp['nband'] = param['nbands']
+        del inp['nbands']
+
+    # ixc is set from paw/xml file. Ignore 'xc' setting then.
+    if param.get('pps') not in ['pawxml']:
+        if 'ixc' not in param:
+            inp['ixc'] = {'LDA': 7,
+                          'PBE': 11,
+                          'revPBE': 14,
+                          'RPBE': 15,
+                          'WC': 23}[param['xc']]
+
+    magmoms = atoms.get_initial_magnetic_moments()
+    if magmoms.any():
+        inp['nsppol'] = 2
+        fd.write('spinat\n')
+        for n, M in enumerate(magmoms):
+            fd.write('%.14f %.14f %.14f\n' % (0, 0, M))
+    else:
+        inp['nsppol'] = 1
+
+    if param['kpts'] is not None:
+        mp = kpts2mp(atoms, param['kpts'])
+        fd.write('kptopt %i\n' % (param.get("kptopt") or 1))
+        fd.write('ngkpt %d %d %d\n' % (param.get("ngkpt") or tuple(mp)))
+        fd.write('nshiftk %i\n' % (param.get("nshiftk") or 1))
+        fd.write('shiftk\n')
+        fd.write('%.3f %.3f %.3f\n' % (param.get("shiftk") or tuple((np.array(mp) + 1) % 2 * 0.5)))
+
+    valid_lists = (list, np.ndarray)
+    for key in sorted(inp):
+        value = inp[key]
+        unit = ase.io.abinit.keys_with_units.get(key)
+        if unit is not None:
+            if 'fs**2' in unit:
+                value /= ase.units.fs ** 2
+            elif 'fs' in unit:
+                value /= ase.units.fs
+        if isinstance(value, valid_lists):
+            if isinstance(value[0], valid_lists):
+                fd.write("{}\n".format(key))
+                for dim in value:
+                    ase.io.abinit.write_list(fd, dim, unit)
+            else:
+                fd.write("{}\n".format(key))
+                ase.io.abinit.write_list(fd, value, unit)
+        else:
+            if unit is None:
+                fd.write("{} {}\n".format(key, value))
+            else:
+                fd.write("{} {} {}\n".format(key, value, unit))
+
+        if param['raw'] is not None:
+            if isinstance(param['raw'], str):
+                raise TypeError('The raw parameter is a single string; expected '
+                                'a sequence of lines')
+            for line in param['raw']:
+                if isinstance(line, tuple):
+                    fd.write(' '.join(['%s' % x for x in line]) + '\n')
+                else:
+                    fd.write('%s\n' % line)
+
+        fd.write('#Definition of the unit cell\n')
+        fd.write('acell\n')
+        fd.write('%.14f %.14f %.14f Angstrom\n' % (1.0, 1.0, 1.0))
+        fd.write('rprim\n')
+        if atoms.cell.rank != 3:
+            raise RuntimeError('Abinit requires a 3D cell, but cell is {}'
+                               .format(atoms.cell))
+        for v in atoms.cell:
+            fd.write('%.14f %.14f %.14f\n' % tuple(v))
+
+        fd.write('chkprim %i # Allow non-primitive cells\n' % (param.get("chkprim") or 0))
+
+        fd.write('#Definition of the atom types\n')
+        fd.write('ntypat %d\n' % (len(species)))
+        fd.write('znucl {}\n'.format(' '.join(str(Z) for Z in species)))
+        fd.write('#Enumerate different atomic species\n')
+        fd.write('typat')
+        fd.write('\n')
+
+        types = []
+        for Z in atoms.numbers:
+            for n, Zs in enumerate(species):
+                if Z == Zs:
+                    types.append(n + 1)
+        n_entries_int = 20  # integer entries per line
+        for n, type in enumerate(types):
+            fd.write(' %d' % (type))
+            if n > 1 and ((n % n_entries_int) == 1):
+                fd.write('\n')
+        fd.write('\n')
+
+        if pseudos is not None:
+            listing = ',\n'.join(pseudos)
+            line = f'pseudos "{listing}"\n'
+            fd.write(line)
+
+        fd.write('#Definition of the atoms\n')
+        fd.write('xcart\n')
+        for pos in atoms.positions / ase.units.Bohr:
+            fd.write('%.14f %.14f %.14f\n' % tuple(pos))
+
+        fd.write('chkexit 1 # abinit.exit file in the running '
+                 'directory terminates after the current SCF\n')
+
+
+def write_abinit_in(fd, atoms, param=None, species=None, pseudos=None):
+    import copy
+    from ase.calculators.calculator import kpts2mp
+    from ase.calculators.abinit import Abinit
+
+    written_properties = set()
+    if param is None:
+        param = {}
+
+    _param = copy.deepcopy(Abinit.default_parameters)
+    _param.update(param)
+    param = _param
+
+    if species is None:
+        species = sorted(set(atoms.numbers))
+
+    inp = {}
+    inp.update(param)
+    for key in ['xc', 'smearing', 'kpts', 'pps', 'raw']:
+        del inp[key]
+
+    smearing = param.get('smearing')
+    if 'tsmear' in param or 'occopt' in param:
+        assert smearing is None
+
+    if smearing is not None:
+        inp['occopt'] = {'fermi-dirac': 3,
+                         'gaussian': 7}[smearing[0].lower()]
+        inp['tsmear'] = smearing[1]
+
+    inp['natom'] = len(atoms)
+
+    if 'nbands' in param:
+        inp['nband'] = param['nbands']
+        del inp['nbands']
+
+    # ixc is set from paw/xml file. Ignore 'xc' setting then.
+    if param.get('pps') not in ['pawxml']:
+        if 'ixc' not in param:
+            inp['ixc'] = {'LDA': 7,
+                          'PBE': 11,
+                          'revPBE': 14,
+                          'RPBE': 15,
+                          'WC': 23}[param['xc']]
+
+    magmoms = atoms.get_initial_magnetic_moments()
+    if magmoms.any():
+        inp['nsppol'] = 2
+        fd.write('spinat\n')
+        for n, M in enumerate(magmoms):
+            fd.write('%.14f %.14f %.14f\n' % (0, 0, M))
+        written_properties |= {"nsppol", "spinat"}
+    else:
+        inp['nsppol'] = 1
+        written_properties.add("nsppol")
+
+    if param['kpts'] is not None:
+        mp = kpts2mp(atoms, param['kpts'])
+        fd.write('kptopt %i\n' % (param.get("kptopt") or 1))
+        fd.write('ngkpt %d %d %d\n' % (param.get("ngkpt") or tuple(mp)))
+        fd.write('nshiftk %i\n' % (param.get("nshiftk") or 1))
+        fd.write('shiftk\n')
+        fd.write('%.3f %.3f %.3f\n' % (param.get("shiftk") or tuple((np.array(mp) + 1) % 2 * 0.5)))
+        written_properties |= {"kptopt", "ngkpt", "nshiftk", "shiftk"}
+
+    fd.write('chkprim %i # Allow non-primitive cells\n' % (param.get("chkprim") or 0))
+    written_properties.add("chkprim")
+
+    valid_lists = (list, np.ndarray)
+    for key in sorted(inp):
+        if key in written_properties:
+            continue
+        value = inp[key]
+        unit = ase.io.abinit.keys_with_units.get(key)
+        if unit is not None:
+            if 'fs**2' in unit:
+                value /= ase.units.fs**2
+            elif 'fs' in unit:
+                value /= ase.units.fs
+
+        if isinstance(value, valid_lists):
+            if isinstance(value[0], valid_lists):
+                fd.write("{}\n".format(key))
+                for dim in value:
+                    ase.io.abinit.write_list(fd, dim, unit)
+            else:
+                fd.write("{}\n".format(key))
+                ase.io.abinit.write_list(fd, value, unit)
+        else:
+            if unit is None:
+                fd.write("{} {}\n".format(key, value))
+            else:
+                fd.write("{} {} {}\n".format(key, value, unit))
+
+    if param['raw'] is not None:
+        if isinstance(param['raw'], str):
+            raise TypeError('The raw parameter is a single string; expected '
+                            'a sequence of lines')
+        for line in param['raw']:
+            if isinstance(line, tuple):
+                fd.write(' '.join(['%s' % x for x in line]) + '\n')
+            else:
+                fd.write('%s\n' % line)
+
+    fd.write('#Definition of the unit cell\n')
+    fd.write('acell\n')
+    fd.write('%.14f %.14f %.14f Angstrom\n' % (1.0, 1.0, 1.0))
+    fd.write('rprim\n')
+    if atoms.cell.rank != 3:
+        raise RuntimeError('Abinit requires a 3D cell, but cell is {}'
+                           .format(atoms.cell))
+    for v in atoms.cell:
+        fd.write('%.14f %.14f %.14f\n' % tuple(v))
+
+
+    fd.write('#Definition of the atom types\n')
+    fd.write('ntypat %d\n' % (len(species)))
+    fd.write('znucl {}\n'.format(' '.join(str(Z) for Z in species)))
+    fd.write('#Enumerate different atomic species\n')
+    fd.write('typat')
+    fd.write('\n')
+
+    types = []
+    for Z in atoms.numbers:
+        for n, Zs in enumerate(species):
+            if Z == Zs:
+                types.append(n + 1)
+    n_entries_int = 20  # integer entries per line
+    for n, type in enumerate(types):
+        fd.write(' %d' % (type))
+        if n > 1 and ((n % n_entries_int) == 1):
+            fd.write('\n')
+    fd.write('\n')
+
+    if pseudos is not None:
+        listing = ',\n'.join(pseudos)
+        line = f'pseudos "{listing}"\n'
+        fd.write(line)
+
+    fd.write('#Definition of the atoms\n')
+    fd.write('xcart\n')
+    for pos in atoms.positions / ase.units.Bohr:
+        fd.write('%.14f %.14f %.14f\n' % tuple(pos))
+
+    fd.write('chkexit 1 # abinit.exit file in the running '
+             'directory terminates after the current SCF\n')
+
+
+def write_all_inputs(atoms, properties, parameters,
+                     pp_paths=None,
+                     raise_exception=True,
+                     label='abinit',
+                     *, v8_legacy_format=True):
+    species = sorted(set(atoms.numbers))
+    if pp_paths is None:
+        pp_paths = ase.io.abinit.get_default_abinit_pp_paths()
+    ppp = ase.io.abinit.get_ppp_list(atoms, species,
+                       raise_exception=raise_exception,
+                       xc=parameters.xc,
+                       pps=parameters.pps,
+                       search_paths=pp_paths)
+
+    if v8_legacy_format is None:
+        warnings.warn(ase.io.abinit.abinit_input_version_warning,
+                      FutureWarning)
+        v8_legacy_format = True
+
+    if v8_legacy_format:
+        with open(label + '.files', 'w') as fd:
+            ase.io.abinit.write_files_file(fd, label, ppp)
+        pseudos = None
+
+        # XXX here we build the txt filename again, which is bad
+        # (also defined in the calculator)
+        output_filename = label + '.txt'
+    else:
+        pseudos = ppp  # Include pseudopotentials in inputfile
+        output_filename = label + '.abo'
+
+    # Abinit will write to label.txtA if label.txt already exists,
+    # so we remove it if it's there:
+    if os.path.isfile(output_filename):
+        os.remove(output_filename)
+
+    parameters.write(label + '.ase')
+
+    with open(label + '.in', 'w') as fd:
+        write_abinit_in(fd, atoms, param=parameters, species=species,
+                        pseudos=pseudos)
+
+
 def get_abinit_version(command):
     txt = subprocess.check_output([command, '--version']).decode('ascii')
     # This allows trailing stuff like betas, rc and so
@@ -180,38 +518,10 @@ class Abinit(FileIOCalculator):
 
     def write_input(self, atoms, properties, system_changes):
         """Write input parameters to files-file."""
-        keys_to_silence = {"kpts", "kptopt", "ngkpt", "nshiftk", "shiftk"}
-        # prevent to ASE to write kpoint section of the in File
-        tmp_parameters = {p: self.parameters.get(p) for p in keys_to_silence if p in self.parameters}
-        for param in tmp_parameters:
-            if param == "kpts":
-                self.parameters[param] = None
-            del self.parameters[param]
-
-        ase.io.abinit.write_all_inputs(
+        write_all_inputs(
             atoms, properties, parameters=self.parameters,
             pp_paths=self.pp_paths,
             label=self.label, v8_legacy_format=self.v8_legacy_format)
-
-        assert os.path.exists(f"{self.label}.in")
-        # we have to fix the k-point input. ASE calculator can only create MP like meshes
-        # we write this section ourselves
-        buffer = io.StringIO()
-        # restore parameters
-        self.parameters.update(tmp_parameters)
-        if tmp_parameters.get("kpts") is not None:
-            kpoints = tmp_parameters.get("kpts")
-            mp = kpts2mp(atoms, kpoints)
-            buffer.write('kptopt %i\n' % (self.parameters.get("kptopt") or 1))
-            buffer.write('ngkpt %d %d %d\n' % (self.parameters.get("ngkpt") or tuple(mp)))
-            buffer.write('nshiftk %i\n' % (self.parameters.get("nshiftk") or 1))
-            buffer.write('shiftk\n')
-            buffer.write('%.3f %.3f %.3f\n' % (self.parameters.get("shiftk") or tuple((np.array(mp) + 1) % 2 * 0.5)))
-            self.parameters["kpts"] = kpoints
-            with open("%s.in" % self.label) as handle:
-                buffer.write(handle.read())
-            with open("%s.in" % self.label, 'w') as handle:
-                handle.write(buffer.getvalue())
 
     def read(self, label):
         """Read results from ABINIT's text-output file."""
