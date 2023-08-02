@@ -8,6 +8,7 @@ ENV_NAME = "wmaee"
 c.Spawner.environment = {
     "PATH": os.path.join(MAMBA_ROOT_PREFIX, 'condabin') + ":" + os.path.join(MAMBA_ROOT_PREFIX, "envs", ENV_NAME, "bin") + ":" + os.environ.get("PATH"),
     "MAMBA_ROOT_PREFIX": MAMBA_ROOT_PREFIX,
+    "WMAEE_CONFIG_FILE": os.path.join("/etc", ENV_NAME, "wmaee.conf.yaml"),
     "JUPYTER_DATA_DIR": lambda spawner: f"/opt/jupyterhub/users/{spawner.user.name}/.local/share/jupyter",
     "JUPYTER_RUNTIME_DIR": lambda spawner: f"/opt/jupyterhub/users/{spawner.user.name}/.local/share/jupyter"
 }

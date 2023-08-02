@@ -55,13 +55,15 @@ RUN bash -c "eval $(micromamba shell hook --shell bash) && micromamba activate w
 
 ENV POTENTIAL_DIR_ABINIT=/opt/potentials/abinit
 ENV POTENTIAL_DIR_GPAW=/opt/potentials/gpaw
+ENV WMAEE_CONFIG_DIR=/etc/wmaee
 
 RUN mkdir -p $POTENTIAL_DIR_ABINIT
 RUN mkdir -p $POTENTIAL_DIR_GPAW
+RUN mkdir -p $WMAEE_CONFIG_DIR
 
-WORKDIR $POTENTIAL_DIR_ABINIT
-COPY abinit-potentials.tar.bz2 .
-RUN tar xf abinit-potentials.tar.bz2
+ADD abinit-potentials.tar.gz $POTENTIAL_DIR_ABINIT
+ADD gpaw-setups-0.9.20000.tar.gz $POTENTIAL_DIR_GPAW
+ADD wmaee.conf.yaml $WMAEE_CONFIG_DIR
 
 
 WORKDIR $JUPYTERHUB_CONF_DIR
