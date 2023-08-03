@@ -1,20 +1,9 @@
 
 applications:
-  vasp:
-    potential_path: /calc/dnoeger/potentials
-    launch:
-      args: ["NCPUS", "VERSION", "MODE"]
-      script: "module purge\n
-module load intel\n
-module load mkl\n
-module load mpich\n
-module load scalapack\n
-mpirun -np {{ NCPUS }} /calc/dnoeger/software/e5-1650/vasp-intel-mpich-mkl/{{ VERSION  }}/bin/vasp_{{ MODE }}"
   gpaw:
-    potential_path: /calc/dnoeger/potentials/gpaw/gpaw-setups-0.9.20000
+    potential_path: /opt/potentials/gpaw/gpaw-setups-0.9.20000
   abinit:
-    potential_path: /home/dominik/.local/software/abinit/potentials
+    potential_path: /opt/potentials/abinit/potentials
     launch:
       args: ["NCPUS", "PREFIX"]
       script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
-
