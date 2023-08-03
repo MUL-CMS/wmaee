@@ -5,26 +5,36 @@ LABEL maintainer="Dominik Gehringer <dominik.gehringer@unileoben.ac.at>"
 
 ENV REPOSITORY_URL=https://git.unileoben.ac.at/cms/wmaee.git
 ENV REPOSITORY_BRANCH=code-interfaces
-
 ENV JUPYTERHUB_CONF_DIR=/etc/jupyterhub
 ENV JUPYTERHUB_BASE_DIR=/opt/jupyterhub
 ENV JUPYTERHUB_USERS_DIR=/opt/jupyterhub/users
-
 ENV MAMBA_URL=https://micro.mamba.pm/api/micromamba/linux-64/latest
 ENV MAMBA_BIN=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/mamba
+ENV POTENTIAL_DIR_ABINIT=/opt/potentials/abinit
+ENV POTENTIAL_DIR_GPAW=/opt/potentials/gpaw
+ENV WMAEE_CONFIG_DIR=/etc/wmaee
+ENV BACKUP_DIRECTORY=/media/wmaee-backup
 
 USER root
 
 RUN mkdir -p $JUPYTERHUB_BASE_DIR
 RUN mkdir -p $JUPYTERHUB_USERS_DIR
 RUN mkdir -p $JUPYTERHUB_CONF_DIR
+RUN mkdir -p $POTENTIAL_DIR_ABINIT
+RUN mkdir -p $POTENTIAL_DIR_GPAW
+RUN mkdir -p $WMAEE_CONFIG_DIR
+RUN mkdir -p $BACKUP_DIRECTORY
+
 
 WORKDIR /
 
+#cron and rsync are needed for creating the backups
 RUN apt-get update --yes && \
     apt-get install --yes --no-install-recommends \
     git \
+    cron \
+    rsync \
     xclip && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -36,6 +46,12 @@ RUN mv ~/.local/bin/micromamba /bin/micromamba
 
 RUN micromamba config append channels conda-forge
 RUN micromamba self-update
+
+# set up the cronjob to backup the user notebooks
+COPY notebook_backup.cron /etc/cron.d/notebook_backup.cron
+RUN chmod 0644 /etc/cron.d/notebook_backup.cron
+# create the log file
+RUN touch /var/log/cron.log
 
 WORKDIR $JUPYTERHUB_CONF_DIR
 
@@ -52,14 +68,6 @@ RUN bash -c "eval $(micromamba shell hook --shell bash) && micromamba activate w
 # publish the mamba environment, by installing it as a foreign kernel
 #https://ipython.readthedocs.io/en/latest/install/kernel_install.html#kernels-for-different-environments
 RUN bash -c "eval $(micromamba shell hook --shell bash) && micromamba activate wmaee && python -m ipykernel install --prefix=$MAMBA_ROOT_PREFIX/envs/wmaee --name wmaee --display-name \"Python 3.8 (wmaee)\""
-
-ENV POTENTIAL_DIR_ABINIT=/opt/potentials/abinit
-ENV POTENTIAL_DIR_GPAW=/opt/potentials/gpaw
-ENV WMAEE_CONFIG_DIR=/etc/wmaee
-
-RUN mkdir -p $POTENTIAL_DIR_ABINIT
-RUN mkdir -p $POTENTIAL_DIR_GPAW
-RUN mkdir -p $WMAEE_CONFIG_DIR
 
 ADD abinit-potentials.tar.gz $POTENTIAL_DIR_ABINIT
 ADD gpaw-setups-0.9.20000.tar.gz $POTENTIAL_DIR_GPAW
@@ -81,8 +89,6 @@ RUN bash -c "./uncrypt.sh users.json.gpg"
 # set up the users
 RUN python configure_users.py users.json jupyterhub_config.py
 RUN rm passwd configure_users.py users.json users.json.gpg uncrypt.sh
-
-
 
 
 CMD ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
