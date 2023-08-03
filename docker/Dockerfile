@@ -8,6 +8,7 @@ ENV REPOSITORY_BRANCH=code-interfaces
 ENV JUPYTERHUB_CONF_DIR=/etc/jupyterhub
 ENV JUPYTERHUB_BASE_DIR=/opt/jupyterhub
 ENV JUPYTERHUB_USERS_DIR=/opt/jupyterhub/users
+ENV JUPYTERHUB_ENABLE_RTC="yes"
 ENV MAMBA_URL=https://micro.mamba.pm/api/micromamba/linux-64/latest
 ENV MAMBA_BIN=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/mamba
@@ -58,6 +59,7 @@ WORKDIR $JUPYTERHUB_CONF_DIR
 #install systemd spawner
 RUN pip install jupyterhub-systemdspawner
 RUN pip install jupyterlab
+RUN pip install jupyter-collaboration
 
 # create jupyter hub
 COPY env.yaml .
@@ -81,6 +83,7 @@ COPY uncrypt.sh .
 COPY passwd .
 COPY configure_users.py .
 COPY jupyterhub_config.py .
+COPY jupyterhub_config_rtc.py .
 
 # encrypt the file
 RUN chmod +x uncrypt.sh
@@ -88,7 +91,7 @@ RUN bash -c "./uncrypt.sh users.json.gpg"
 
 # set up the users
 RUN python configure_users.py users.json jupyterhub_config.py
-RUN rm passwd configure_users.py users.json users.json.gpg uncrypt.sh
+RUN rm passwd configure_users.py users.json users.json.gpg uncrypt.sh jupyterhub_config_rtc.py
 
 
 CMD ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
