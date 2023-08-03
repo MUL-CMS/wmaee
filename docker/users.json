@@ -1,10 +1,11 @@
 {
   "admins": {
-    "dgehringer": "1625acf3b1f24be9b36d6ad95ac6c15e",
-    "dholec":  "5b066a6f119042feb460f948f73d70c1"
+    "dgehringer": "dgehringer",
+    "dholec":  "dholec"
   },
   "users": {
-    "tleiner": "08ca0637ae4e440c803367f0a915a6fe"
+    "tleiner": "tleiner",
+    "asakic": "asakic"
   }
 }
 

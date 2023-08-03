@@ -5,6 +5,7 @@ import sys
 import json
 from typing import *
 
+JUPYTERHUB_ENABLE_RTC = os.environ["JUPYTERHUB_ENABLE_RTC"]
 JUPYTERHUB_USERS_DIR = os.environ["JUPYTERHUB_USERS_DIR"]
 MAMBA_ROOT_PREFIX = os.environ["MAMBA_ROOT_PREFIX"]
 BACKUP_DIRECTORY = os.environ["BACKUP_DIRECTORY"]
@@ -41,7 +42,6 @@ def create_users(u: Dict[str, str]) -> NoReturn:
         system(f"chown -R {username}:{username} {os.path.join(user_directory, '.local')}")
 
 
-
 def format_user_set(users: Iterable[str]) -> str:
     contents = ", ".join(f"'{user}'" for user in users)
     return f"{{{contents}}}"
@@ -58,8 +58,15 @@ if __name__ == "__main__":
     all_users.update(users)
     create_users(all_users)
     # append the users to the notebook auth
-    system(f"echo \"c.Authenticator.admin_users = {format_user_set(admins)}\" >> {config_file}")
-    system(f"echo \"c.Authenticator.allowed_users = {format_user_set(all_users)}\" >> {config_file}")
+    system(f"echo \"ADMIN_USERS = {format_user_set(admins)}\" >> {config_file}")
+    system(f"echo \"c.Authenticator.admin_users = ADMIN_USERS\" >> {config_file}")
+    system(f"echo \"ALL_USERS = {format_user_set(all_users)}\" >> {config_file}")
+    system(f"echo \"c.Authenticator.allowed_users = ALL_USERS\" >> {config_file}")
+
+    if JUPYTERHUB_ENABLE_RTC.lower() == "yes":
+        # write RTC configuration according to this post
+        # https://discourse.jupyter.org/t/plans-on-bringing-rtc-to-jupyterhub/9813/7
+        system(f"cat jupyterhub_config_rtc.py >> {config_file}")
 
 
 
