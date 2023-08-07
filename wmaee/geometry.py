@@ -7,6 +7,20 @@ from typing import Tuple, Dict
 
 
 def find_neighbors(atoms: Atoms, rcut: float = 3.0, mindist: float = 0.1, properties: Tuple[str, ...] = ("indices", "distances", "images", "vecs")) -> Dict[int, Tuple[np.ndarray, ...]]:
+    """
+    Query an {atoms} object for neighbors within {mindist} and {rcut}. This function applies the minimum image convention
+
+    :param atoms: the atoms object to query
+    :type atoms: Atoms
+    :param rcut: the cutoff distance
+    :type rcut: float
+    :param mindist: the minimum distance
+    :type mindist: float
+    :param properties: an iterable of properties zo return. Available are *indices*, *distances*, *images*, *vecs*
+    :type properties: Iterable[str]
+    :return: a dictionary. The keys refer to the atom id, while the values hold the desired *properties*
+    :rtype: Dict[int, Any]
+    """
     a, b, c = atoms.cell
     stride = len(atoms)
     image_vector = np.zeros((stride * 27, 3), dtype=float)
