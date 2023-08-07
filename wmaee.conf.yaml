@@ -1,9 +1,9 @@
 
 applications:
   gpaw:
-    potential_path: /opt/potentials/gpaw/gpaw-setups-0.9.20000
+    potential_path: /home/dominik/.local/software/gpaw/potentials
   abinit:
-    potential_path: /opt/potentials/abinit/potentials
+    potential_path: /home/dominik/.local/software/abinit/potentials
     launch:
       args: ["NCPUS", "PREFIX"]
       script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
