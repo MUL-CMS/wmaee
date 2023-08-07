@@ -16,6 +16,7 @@ from ase.io.trajectory import TrajectoryReader, TrajectoryWriter
 from wmaee.units import HARTREE_TO_EV
 from wmaee.core.utils import merge, override_environ
 from wmaee.core.interfaces.requirements import requires
+from wmaee.core.interfaces.abinit_netcdf_trajectory import read_abinit_netcdf_trajectory
 from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit, calculate
 
 Incar = Potcar = frozendict
@@ -124,6 +125,14 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
             os.makedirs(directory, exist_ok=True)
         abinit_kwargs = merge(self.kwargs, kwargs)
         self.calculator, _ = abinit(write_input, self.atoms, directory=directory, prefix=self.prefix, kpts=self.kpts, **abinit_kwargs)
+
+    def get_trajectory(self):
+        """
+        Reads the file {label}o_HIST.nc and extracts the trajectory. Useful when visualizing e.g., relaxations
+        """
+        if self.calculator is None:
+            raise RuntimeError("The calculation was not yet executed. Please call calculation.run() before loading the trajectory")
+        return read_abinit_netcdf_trajectory(self.calculator)
 
 
 @dataclasses.dataclass
