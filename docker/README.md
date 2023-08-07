@@ -13,7 +13,31 @@ a few more needed. Those are
  - `jupyterhub_config.py`: the configuration file for the jupyter hub
  - `wmaee.conf.yaml`: the config file for the *wmaee* module
 
-## PAW potentials
+## Prerequisites
+
+### System requirements
+
+The whole deployment is based on [Docker](https://en.wikipedia.org/wiki/Docker_(software)) while our specific deployment
+is based on the [Jupyterhub](https://hub.docker.com/r/jupyterhub/jupyterhub/) image. To create the single user
+JupyterLab instances, we use the [systemd](https://github.com/jupyterhub/systemdspawner) spawner. The reasons therefore are:
+
+  - limit CPUs per user
+  - limit memory per user
+  - isolate user directories
+  - hide system devices
+  - that leads to improved security
+
+However, this choice comes at a cost. While the userland comes from the image the Docker engine uses the host systems 
+kernel. To make systemd spawner work properly *systemd >= 245* is required. You can check the version with 
+`systemctl --verison`. [Here](https://github.com/jupyterhub/systemdspawner#systemd-and-linux-distributions) is a list of 
+suggested (host) systems.
+
+### wmaee code itself
+The current version of the wmaee module that reuses ASE's interfaces is located in the *code-interfaces* branch.
+In case you merge the changes into a different branch you have to adapt the `Dockerfile`. Upon building the image
+the latest version is installed via pip and git.
+
+### PAW potentials
 to make the codes work smoothly for the students, we are going to need PAW potentials for both ABINIT and GPAW.
 Currently, the ABINIT potentials are located in an archive named `abinit-potentials.tar.gz`, but you can download them 
 from the [ABINIT site of ase](https://wiki.fysik.dtu.dk/ase/ase/calculators/abinit.html). Similarly, the 
@@ -21,6 +45,9 @@ GPAW potentials `gpaw-setups-0.9.20000.tar.gz` might be downloaded from the GPAW
 located in the same directory as the `Dockerfile` when building the image. In case the filenames change you have to adapt
 the `Dockerfile` accordingly. For safety reason there are copies of the archives on the fileserver 
 (*dgehringer@fileserver:/share/homes/dgehringer/calculations/wmaee*).
+In case you change the paths within the PAW potentials do not forget to adapt the paths in `wmaee.conf.yaml` as well.
+
+
 
 ## Guide
 
