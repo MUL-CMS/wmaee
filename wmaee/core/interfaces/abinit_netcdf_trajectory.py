@@ -1,33 +1,11 @@
 
 import numpy as np
-from typing import List
 from ase.atoms import Atoms
 from netCDF4 import Dataset
+from typing import List, Optional
 from ase.units import Hartree, Bohr
 from ase.calculators.abinit import Abinit
 from ase.calculators.calculator import Calculator
-
-
-def make_history_filename(abinit: Abinit):
-    return f"{abinit.label}o_HIST.nc"
-
-
-def read_num_structures(dset: Dataset) -> int:
-    n, *_ = dset.variables["ekin"].shape
-    return n
-
-
-def read_species(dset: Dataset) -> List[int]:
-    zvals = [int(ordinal) for ordinal in dset.variables["znucl"][:]]
-    return [zvals[int(typid) - 1] for typid in dset.variables["typat"][:]]
-
-
-def read_cell(dset: Dataset, index: int) -> np.ndarray:
-    return np.array(dset.variables["rprimd"][index, :, :]) * Bohr
-
-
-def read_positions(dset: Dataset, index: int) -> np.ndarray:
-    return np.array(dset.variables["xcart"][index, :, :]) * Bohr
 
 
 class AbinitNetCDFDummyCalculator(Calculator):
@@ -55,10 +33,60 @@ class AbinitNetCDFDummyCalculator(Calculator):
         return self._dset.variables["etotal"][self._index] * Hartree
 
 
-def read_abinit_netcdf_trajectory(abinit: Abinit):
-    dset = Dataset(make_history_filename(abinit))
-    numbers = read_species(dset)
-    for i in range(read_num_structures(dset)):
-        atoms = Atoms(cell=read_cell(dset, i), positions=read_positions(dset, i), numbers=numbers, calculator=AbinitNetCDFDummyCalculator(dset, i))
-        yield atoms
-    dset.close()
+class AbinitNetCDF4TrajectoryReader:
+
+    def __init__(self, abinit: Abinit):
+        self._abinit: Abinit = abinit
+        self._dset: Optional[Dataset] = None
+        self._numbers: Optional[List[int]] = None
+        self._num_structures: Optional[int] = None
+        self._indexer: Optional[List[int]] = None
+        self._open(f"{self._abinit.label}o_HIST.nc")
+
+    def _open(self, filename: str):
+        self._dset = Dataset(filename)
+        self._numbers = self.read_species()
+        self._num_structures = self.read_num_structures()
+        self._indexer = list(range(self._num_structures))
+
+    def read_species(self) -> List[int]:
+        zvals = [int(ordinal) for ordinal in self._dset.variables["znucl"][:]]
+        return [zvals[int(typid) - 1] for typid in self._dset.variables["typat"][:]]
+
+    def read_num_structures(self) -> int:
+        n, *_ = self._dset.variables["ekin"].shape
+        return n
+
+    def read_cell(self, index: int) -> np.ndarray:
+        return np.array(self._dset.variables["rprimd"][index, :, :]) * Bohr
+
+    def read_positions(self, index: int) -> np.ndarray:
+        return np.array(self._dset.variables["xcart"][index, :, :]) * Bohr
+
+    def read_atoms(self, index: int) -> Atoms:
+        return Atoms(
+            cell=self.read_cell(index),
+            positions=self.read_positions(index),
+            numbers=self._numbers.copy(),
+            calculator=AbinitNetCDFDummyCalculator(self._dset, index)
+        )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._dset.isopen():
+            self._dset.close()
+
+    def __len__(self):
+        return self._num_structures
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            return tuple(map(self.read_atoms, self._indexer[item]))
+        else:
+            return self.read_atoms(item)
+
+    def __iter__(self):
+        for i in range(self._num_structures):
+            yield self[i]

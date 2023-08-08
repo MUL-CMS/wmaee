@@ -16,7 +16,7 @@ from ase.io.trajectory import TrajectoryReader, TrajectoryWriter
 from wmaee.units import HARTREE_TO_EV
 from wmaee.core.utils import merge, override_environ
 from wmaee.core.interfaces.requirements import requires
-from wmaee.core.interfaces.abinit_netcdf_trajectory import read_abinit_netcdf_trajectory
+from wmaee.core.interfaces.abinit_netcdf_trajectory import AbinitNetCDF4TrajectoryReader
 from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit, calculate
 
 Incar = Potcar = frozendict
@@ -59,6 +59,7 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
         self.prefix = self.atoms.get_chemical_formula() if prefix is None else prefix
         self.kwargs = frozendict(merge(dict(ecut=ecut, toldfe=toldfe, ixc=ixc, pps=pps, xc=xc), kwargs))
         self.calculator = None
+        self._trajectory = None
 
     def set(self, *remove: str, **tags) -> AbinitCalculation:
         """
@@ -132,7 +133,9 @@ class AbinitCalculation(AtomsAndCalculatorProxy):
         """
         if self.calculator is None:
             raise RuntimeError("The calculation was not yet executed. Please call calculation.run() before loading the trajectory")
-        return read_abinit_netcdf_trajectory(self.calculator)
+        if self._trajectory is None:
+            self._trajectory = AbinitNetCDF4TrajectoryReader(self.calculator)
+        return self._trajectory
 
 
 @dataclasses.dataclass
