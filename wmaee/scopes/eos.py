@@ -180,7 +180,7 @@ def birch_murnaghan_fit(volumes: ArrayLike, energies: ArrayLike, p0: Optional[It
     :type energies: ArrayLike
     :param p0: (iterable) starting parameters in the order E0_guess, V0_guess, B0_guess, Bp_guess (default: None)
     :param return_analytic: (bool) wether also to return a SymPy analytic expression of the fit
-    :returns: (optimum:np.array, E(V):callable, optional analytic:Sympy.Expression)
+    :return: (optimum:np.array, E(V):callable, optional analytic:Sympy.Expression)
     """
 
     if p0 is None:
