@@ -2,8 +2,11 @@
 Convenient functions for fitting the energy-volume calculations.
 """
 
-from scipy.optimize import curve_fit
+
 import numpy as np
+from typing import *
+from scipy.optimize import curve_fit
+from numpy.typing import ArrayLike, NDArray
 
 
 def murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
@@ -57,11 +60,12 @@ def murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
 ###############################################################################
 
 
-def birch_murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
+def birch_murnaghan_fit_(volumes: ArrayLike, energies: ArrayLike) -> Tuple[float, float, float, float, NDArray, NDArray]:
     """
     This function takes two arguments in np.ndarray format, 
     performs a Birch-Murnaghan EoS fit, and returns 
     E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit.
+
 
     E_eq ... equilibrium energy.
     V_eq ... equilibrium volume.
@@ -89,10 +93,7 @@ def birch_murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
     p_opt, p_cov = curve_fit(birch_murnaghan_eos, volumes, energies, p0=p_in)
 
     # Extracting fitted parameters
-    E_eq = p_opt[0]
-    V_eq = p_opt[1]
-    B_eq = p_opt[2]
-    Bp_eq = p_opt[3]
+    E_eq, V_eq, B_eq, Bp_eq = p_opt
 
     # Calculating the standard deviation of the fitted parameters
     p_err = np.sqrt(np.diag(p_cov))
@@ -105,10 +106,8 @@ def birch_murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
 
     return E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit
 
-#################################################################################
 
-
-def polynomial_fit(volumes: np.ndarray, energies: np.ndarray, order=3):
+def polynomial_fit(volumes: ArrayLike, energies: ArrayLike, order: int = 3):
     """
     This function takes two arguments in np.ndarray format, 
     performs a polynomial fit, and returns 
@@ -165,3 +164,31 @@ def polynomial_fit(volumes: np.ndarray, energies: np.ndarray, order=3):
     E_fit = np.polyval(coefficients, V_fit)
 
     return E_eq, V_eq, B_eq, V_fit, E_fit
+
+
+def birch_murnaghan(volumes: ArrayLike, e0: float, v0: float, b0: float, bp: float):
+    two_thirds = 2/3
+    return e0 + (9 * v0 * b0 / 16) * (bp * ((volumes / v0) ** two_thirds - 1) ** 3 + ((volumes / v0) ** two_thirds - 1) ** 2 * (6 - 4 * (volumes / v0) ** two_thirds))
+
+
+def birch_murnaghan_fit(volumes: ArrayLike, energies: ArrayLike, p0: Optional[Iterable[float]] = None) -> Tuple[Iterable[float], Callable[[NDArray], NDArray]]:
+    """
+    Performs a Birch-Murnaghan-fit on a given set of volumes and energies
+    :param volumes: volumes
+    :type volumes: ArrayLike
+    :param energies: energies
+    :type energies: ArrayLike
+    :param p0: (iterable) starting parameters in the order E0_guess, V0_guess, B0_guess, Bp_guess (default: None)
+    :param return_analytic: (bool) wether also to return a SymPy analytic expression of the fit
+    :returns: (optimum:np.array, E(V):callable, optional analytic:Sympy.Expression)
+    """
+
+    if p0 is None:
+        V0_guess = np.amin(volumes)
+        E0_guess = np.amin(energies)
+        B0_guess = 100
+        Bp_guess = 1
+        p0 = (E0_guess, V0_guess, B0_guess, Bp_guess)
+
+    optimum, _ = curve_fit(birch_murnaghan, np.array(volumes), np.array(energies), p0=p0)
+    return optimum, lambda volumes: birch_murnaghan(volumes, *optimum)
