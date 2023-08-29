@@ -11,7 +11,7 @@ import functools
 from typing import *
 
 BACKUP_DIR="/media/backup"
-KEEP = 2
+KEEP = 7
 EXCLUDE_USERS = frozenset({"nobody"})
 EXCLUDE_PATTERNS = {"*.git*", "*.tar.gz", "*.local/*", "*/.bash*", "*.kim-api/*", "*.cache/*", "*.npm/*", "*.jupyter/*", "*.ipython/*", "*.db", "*.profile"}
 
