@@ -1,0 +1,5 @@
+Host fileserver
+    HostName 193.171.82.188
+    Port 2222
+    User dgehringer
+    IdentityFile /root/.ssh/id_rsa_fileserver

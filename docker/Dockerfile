@@ -15,7 +15,7 @@ ENV MAMBA_ROOT_PREFIX=/opt/mamba
 ENV POTENTIAL_DIR_ABINIT=/opt/potentials/abinit
 ENV POTENTIAL_DIR_GPAW=/opt/potentials/gpaw
 ENV WMAEE_CONFIG_DIR=/etc/wmaee
-ENV BACKUP_DIRECTORY=/media/wmaee-backup
+ENV BACKUP_DIRECTORY=/media/backup
 
 USER root
 
@@ -36,6 +36,7 @@ RUN apt-get update --yes && \
     git \
     cron \
     rsync \
+    sshfs \
     xclip && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -53,6 +54,7 @@ COPY notebook_backup.cron /etc/cron.d/notebook_backup.cron
 RUN chmod 0644 /etc/cron.d/notebook_backup.cron
 # create the log file
 RUN touch /var/log/cron.log
+
 
 WORKDIR $JUPYTERHUB_CONF_DIR
 
@@ -93,6 +95,22 @@ RUN bash -c "./uncrypt.sh users.json.gpg"
 RUN python configure_users.py users.json jupyterhub_config.py
 RUN rm passwd configure_users.py users.json users.json.gpg uncrypt.sh jupyterhub_config_rtc.py
 
+
+#setup root ssh capabilities
+WORKDIR /root
+
+COPY backup-users.py .
+RUN chmod +x backup-users.py
+
+RUN mkdir -p ".ssh"
+RUN chmod 700 .ssh
+
+WORKDIR /root/.ssh
+COPY id_rsa_fileserver .
+RUN chmod 600 id_rsa_fileserver
+COPY config .
+
+WORKDIR /root
 
 CMD ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
 
