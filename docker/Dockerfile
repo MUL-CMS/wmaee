@@ -49,13 +49,6 @@ RUN mv ~/.local/bin/micromamba /bin/micromamba
 RUN micromamba config append channels conda-forge
 RUN micromamba self-update
 
-# set up the cronjob to backup the user notebooks
-COPY notebook_backup.cron /etc/cron.d/notebook_backup.cron
-RUN chmod 0644 /etc/cron.d/notebook_backup.cron
-# create the log file
-RUN touch /var/log/cron.log
-
-
 WORKDIR $JUPYTERHUB_CONF_DIR
 
 #install systemd spawner
@@ -105,10 +98,18 @@ RUN chmod +x backup-users.py
 RUN mkdir -p ".ssh"
 RUN chmod 700 .ssh
 
+# set up the cronjob to backup the user notebooks
+COPY user_backup.cron .
+RUN cat user_backup.cron >> /etc/crontab
+RUN rm user_backup.cron
+RUN service cron start
+
 WORKDIR /root/.ssh
 COPY id_rsa_fileserver .
 RUN chmod 600 id_rsa_fileserver
 COPY config .
+RUN chmod 600 config
+
 
 WORKDIR /root
 
