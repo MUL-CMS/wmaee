@@ -92,8 +92,9 @@ def classify_archives(u: str) -> Tuple[List[str], List[str]]:
 if __name__ == "__main__":
     for user in users:
         with tempfile.NamedTemporaryFile('w') as file_list:
-            for f in discard_excluded(files_in_directory(user)):
-                print(f, file=file_list)
+            with file_list.file as handle:
+                for f in discard_excluded(files_in_directory(user)):
+                    print(f, file=handle)
             pack_user_archive(user, file_list.name)
 
             delete, _ = classify_archives(user)
