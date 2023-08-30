@@ -113,10 +113,10 @@ COPY uncrypt.sh .
 RUN chmod +x uncrypt.sh
 COPY passwd .
 
-COPY know_hosts.gpg .
-RUN bash -c "./uncrypt.sh know_hosts.gpg"
+COPY known_hosts.gpg .
+RUN bash -c "./uncrypt.sh known_hosts.gpg"
 RUN chmod 644 known_hosts
-RUN rm know_hosts.gpg
+RUN rm known_hosts.gpg
 
 COPY id_rsa.gpg .
 RUN bash -c "./uncrypt.sh id_rsa.gpg"
