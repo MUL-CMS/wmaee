@@ -16,6 +16,8 @@ ENV POTENTIAL_DIR_ABINIT=/opt/potentials/abinit
 ENV POTENTIAL_DIR_GPAW=/opt/potentials/gpaw
 ENV WMAEE_CONFIG_DIR=/etc/wmaee
 ENV BACKUP_DIRECTORY=/media/backup
+ENV BACKUP_REMOTE=fileserver
+ENV BACKUP_REMOTE_DIRECTORY=/share/homes/dgehringer/calculations/wmaee/data/2023
 
 USER root
 
@@ -105,14 +107,31 @@ RUN rm user_backup.cron
 RUN service cron start
 
 WORKDIR /root/.ssh
-COPY id_rsa_fileserver .
+
+# uncrypt the ssh config
+COPY uncrypt.sh .
+COPY passwd .
+
+COPY know_hosts.gpg .
+RUN bash -c "./uncrypt.sh know_hosts.gpg"
+RUN chmod 644 known_hosts
+RUN rm know_hosts.gpg
+
+COPY id_rsa.gpg .
+RUN bash -c "./uncrypt.sh id_rsa.gpg"
+RUN mv id_rsa id_rsa_fileserver
 RUN chmod 600 id_rsa_fileserver
-COPY config .
+RUN rm id_rsa.gpg
+
+
+COPY config.gpg .
+RUN bash -c "./uncrypt.sh config.gpg"
 RUN chmod 600 config
+RUN rm config.gpg
 
 
 WORKDIR /root
 
-CMD ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
+CMD ["sh", "-c", "sshfs $BACKUP_REMOTE:$BACKUP_REMOTE_DIRECTORY $BACKUP_DIRECTORY && jupyterhub -f /etc/jupyterhub/jupyterhub_config.py"]
 
 

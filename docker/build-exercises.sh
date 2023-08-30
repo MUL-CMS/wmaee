@@ -1,9 +1,6 @@
 #!/bin/bash
 
 IMAGE="wmaee"
-IMAGE_BACKUP_DIR="/media/backup"
-SSHFS_REMOTE="fileserver"
-SSHFS_REMOTE_DIRECTORY="/share/homes/dgehringer/calculations/wmaee/data/2023"
 # backup directory in the container
 PORT=8000
 
@@ -24,7 +21,4 @@ else
   # https://github.com/moby/moby/issues/16233
   docker run --security-opt apparmor:unconfined --cap-add SYS_ADMIN --device /dev/fuse -p $PORT:$PORT -d --name $IMAGE "$IMAGE:latest"
   # in previous version I forgot to set the permissions in the Dockerfile, just make sure that this is fixed now
-  docker exec -it wmaee bash -c "chmod 600 /root/.ssh/config"
-  # mount the SSHFS drive
-  docker exec -it wmaee bash -c "sshfs $SSHFS_REMOTE:$SSHFS_REMOTE_DIRECTORY $IMAGE_BACKUP_DIR"
 fi
