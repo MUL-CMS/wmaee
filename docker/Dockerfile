@@ -110,6 +110,7 @@ WORKDIR /root/.ssh
 
 # uncrypt the ssh config
 COPY uncrypt.sh .
+RUN chmod +x uncrypt.sh
 COPY passwd .
 
 COPY know_hosts.gpg .
@@ -128,6 +129,8 @@ COPY config.gpg .
 RUN bash -c "./uncrypt.sh config.gpg"
 RUN chmod 600 config
 RUN rm config.gpg
+
+RUN rm uncrypt.sh passwd
 
 
 WORKDIR /root
