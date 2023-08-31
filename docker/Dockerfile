@@ -132,7 +132,6 @@ RUN rm config.gpg
 
 RUN rm uncrypt.sh passwd
 
-
 WORKDIR /root
 
 CMD ["sh", "-c", "sshfs $BACKUP_REMOTE:$BACKUP_REMOTE_DIRECTORY $BACKUP_DIRECTORY && jupyterhub -f /etc/jupyterhub/jupyterhub_config.py"]

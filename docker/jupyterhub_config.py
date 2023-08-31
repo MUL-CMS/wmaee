@@ -26,3 +26,5 @@ c.SystemdSpawner.disable_user_sudo = True
 c.SystemdSpawner.extra_paths = ['/opt/mamba/envs/wmaee/bin']
 c.SystemdSpawner.readwrite_paths = ['/opt/jupyterhub/users/{USERNAME}']
 c.SystemdSpawner.readonly_paths = ['/']
+
+# leave always new line at the end
