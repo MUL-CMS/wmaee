@@ -2,6 +2,10 @@ import os
 import numpy as np
 import shutil
 
+from pymatgen.io.vasp.inputs import Potcar, PotcarSingle
+from pymatgen.core.composition import Composition
+from pymatgen.core.structure import Structure
+
 
 def write_automatic_kpoints_file(length: float):
     '''
@@ -118,6 +122,57 @@ def concat_potcar_files(poscar_in='POSCAR', potcar_out='POTCAR', potcar_path=os.
                     break
             if not found:
                 print(f"{element} not found in any potcar")
+
+
+def generate_potcar(structure: Structure, potcar_dir: str, potcar_mapping: dict=None, write: bool=True) -> Potcar:
+    """
+    Generate a POTCAR file for VASP calculations based on the elements in the structure.
+
+    Parameters:
+        structure : pymatgen.Structure
+            The structure for which POTCAR is to be generated.
+        potcar_dir : str
+            The directory where the VASP POTCAR files are located.
+        potcar_mapping : dict (optional, default: None)
+            An optional mapping of species to POTCARs, e.g. {'Fe': 'Fe_pv'}. 
+            For elements not explicitly specifies, a default mappig {'X': 'X'}
+            will be applied.
+        write : bool (optional, default: True)
+            Whether to write the POTCAR (into current directory).
+        
+
+    Returns:
+        pymatgen.Potcar:
+            A Potcar object representing the POTCAR files for the elements in the structure.
+    """
+    
+    
+    # get list of species as in in POSCAR
+    sp = [structure.sites[0].species_string]
+    for s in structure.sites[1:]:
+        if s.species_string != sp[-1]:
+            sp.append(s.species_string)
+    
+    # get dictionary of all single POTCARs we need
+    for s in set(sp):
+        if s not in potcar_mapping.keys():
+            potcar_mapping[s] = s
+    potcars = {
+       X: PotcarSingle.from_file(os.path.join(potcar_dir, potcar_mapping[X], 'POTCAR')) for X in sp
+    }
+
+    # construct POTCAR
+    potcar = Potcar()
+    functionals = []
+    for X in sp:
+        potcar.append(potcars[X])
+        functionals.append(potcars[X].functional)
+    potcar.functional = functionals[0]
+
+    if write:
+        # Write the POTCAR to a file
+        with open("POTCAR", "w") as f:
+            f.write(str(potcar))
 
 
 def write_incar(incar_in: dict, magnetism=False, incar_out='INCAR'):
