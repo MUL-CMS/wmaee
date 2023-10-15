@@ -1,9 +1,11 @@
 import os
-from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Dos, Xdatcar, Outcar
-from pymatgen.io.vasp.inputs import Poscar, Incar, Kpoints
+from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Dos, Xdatcar
+from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.core.structure import Structure
 from typing import Optional, Dict, Union, List
 from wmaee.core.data_structs import DotDict
+from monty.io import zopen
+import re
 
 def parse_output(vasp_dir: Optional[str] = None,
                  parse_dos: bool = False,
@@ -85,3 +87,75 @@ def parse_output(vasp_dir: Optional[str] = None,
         return DotDict(output_data)
     else:
         return output_data
+    
+
+
+def parse_forces(OUTCAR: bool = False, 
+                 filename: str = None, 
+                 last: bool = False
+                ) -> Union[List[List[List[float]]], List[List[float]]]:
+    """
+    Parse forces from VASP OUTCAR or vasprun.xml files.
+
+    Args:
+        OUTCAR (bool): If True, parse forces from OUTCAR; if False, parse from vasprun.xml.
+        filename (str, optional): The name of the file to parse forces from. If None, uses 
+            default filenames ('OUTCAR' or 'vasprun.xml').
+        last (bool, optional): If True, return only forces for the last step; if False, return forces for all steps.
+
+    Returns:
+        Union[List[List[List[float]], List[List[float]]]: 
+        - A list of forces for all steps from the specified file if last is False.
+        - Forces for the last step from the specified file if last is True.
+    """
+    if OUTCAR:
+        # parsing from OUTCAR
+        if filename == None:
+            # default filename
+            filename = 'OUTCAR'
+        # below definition taken of regex from https://gist.github.com/gVallverdu/0e232988f32109b5dc6202cf193a49fb
+        header_pattern = r"\sPOSITION\s+TOTAL-FORCE \(eV/Angst\)\n\s-+"
+        row_pattern = r"\s+[+-]?\d+\.\d+\s+[+-]?\d+\.\d+\s+[+-]?\d+\.\d+\s+([+-]?\d+\.\d+)\s+([+-]?\d+\.\d+)\s+([+-]?\d+\.\d+)"
+        footer_pattern = r"\s--+"
+        postprocess = lambda x: float(x)
+        table_pattern_text = header_pattern + r"\s*^(?P<table_body>(?:\s+" + row_pattern + r")+)\s+" + footer_pattern
+        table_pattern = re.compile(table_pattern_text, re.MULTILINE | re.DOTALL)
+        rp = re.compile(row_pattern)
+        # below is part of the pymatgen.io.vasp.Outcar.read_table_pattern() function
+        with zopen(filename, "rt") as f:
+            text = f.read()
+        forces = []
+        for mt in table_pattern.finditer(text):
+            table_body_text = mt.group("table_body")
+            table_contents = []
+            for line in table_body_text.split("\n"):
+                ml = rp.search(line)
+                # skip empty lines
+                if not ml:
+                    continue
+                d = ml.groupdict()
+                if len(d) > 0:
+                    processed_line = {k: postprocess(v) for k, v in d.items()}
+                else:
+                    processed_line = [postprocess(v) for v in ml.groups()]
+                table_contents.append(processed_line)
+            forces.append(table_contents)
+        if last:
+            # return only last forces
+            return forces[-1]
+        else:
+            # return forces for all steps
+            return forces
+    else:
+        # parsing from vasprun.xml
+        if filename == None:
+            # default filename
+            filename = 'vasprun.xml'
+        vrun = Vasprun(filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False)
+        tr = vrun.get_trajectory()
+        if last:
+            # return only last forces
+            return tr[-1].site_properties['forces']
+        else:
+            # return forces for all steps
+            return [step.site_properties['forces'] for step in tr]
