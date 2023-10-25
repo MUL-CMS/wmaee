@@ -17,11 +17,11 @@ fi
 if [[ "$(docker images -q "$IMAGE_PROXY:latest" 2> /dev/null)" == "" ]];
 then
   cd nginx-reverse
-  echo "[INFO]: Building image \"$IMAGE:latest\""
-  docker build -t $IMAGE_IMAGE_PROXY .
+  echo "[INFO]: Building image \"$IMAGE_PROXY:latest\""
+  docker build -t $IMAGE_PROXY .
   cd ..
 else
-  echo "[INFO]: Image \"$IMAGE\" does exist already"
+  echo "[INFO]: Image \"$IMAGE_PROXY\" does exist already"
 fi
 
 
