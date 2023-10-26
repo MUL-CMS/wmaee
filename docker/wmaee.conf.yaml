@@ -1,0 +1,9 @@
+
+applications:
+  gpaw:
+    potential_path: /opt/potentials/gpaw/gpaw-setups-0.9.20000
+  abinit:
+    potential_path: /opt/potentials/abinit/potentials
+    launch:
+      args: ["NCPUS", "PREFIX"]
+      script: "OMP_NUM_THREADS=1 mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
