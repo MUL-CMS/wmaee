@@ -5,12 +5,12 @@ from itertools import product
 def rdf(struct, rmin=1, rmax=10, nbins=90):
     """
     Calculate radial distribution function (RDF) for a given structure
-    :param struct: (pymatgen.Structure or ase.Atoms) the structure
+    :param struct: (pymatgen.Structure) the structure
     :param rmin: (float) Rmin of the radial mesh (default: 1 (Angstroem))
     :param rmax: (float) Rmax of the radial mesh (default: 10 (Angstroem))
     :param nbins: (int) number of bins (points) along the radial mesh (default: 90)
     :return: (r:numpy.array, rdf:numpy.array) radial mesh, RDF
-    """
+    """   
 
     # define radial mesh for RDF
     bin_edges = np.linspace(rmin, rmax, nbins+1)
@@ -26,7 +26,7 @@ def rdf(struct, rmin=1, rmax=10, nbins=90):
 def rdf_partial(struct, rmin=1, rmax=10, nbins=90):
     """
     Calculate radial distribution function (RDF) including all partial RDFs for a given structure
-    :param struct: (pymatgen.Structure or ase.Atoms) the structure
+    :param struct: (pymatgen.Structure) the structure
     :param rmin: (float) Rmin of the radial mesh (default: 1 (Angstroem))
     :param rmax: (float) Rmax of the radial mesh (default: 10 (Angstroem))
     :param nbins: (int) number of bins (points) along the radial mesh (default: 90)

@@ -1,0 +1,10 @@
+
+applications:
+  gpaw:
+    potential_path: /home/dominik/.local/software/gpaw/potentials
+  abinit:
+    potential_path: /home/dominik/.local/software/abinit/potentials
+    launch:
+      args: ["NCPUS", "PREFIX"]
+      script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
+

@@ -1,73 +1,100 @@
+from os import getcwd, mkdir, chdir
+from os.path import exists
 
-
-from io import StringIO
-from time import sleep
-
-
-class StringStream(StringIO):
+class working_directory(object):
     """
-    A class representing a dummy stream, which can be used to write data to and read from it
+    A class for convenient change into a tree of subdirectories including 
+    their creation.
     """
+    
+    def __split_path(self, path):
+        """
+        Helper function to split string into list of directories.
+        """
+        from os.path import split
+        allparts = []
+        while 1:
+            parts = split(path)
+            if parts[0] == path:  # sentinel for absolute paths
+                allparts.insert(0, parts[0])
+                break
+            elif parts[1] == path: # sentinel for relative paths
+                allparts.insert(0, parts[1])
+                break
+            else:
+                path = parts[0]
+                allparts.insert(0, parts[1])
+        return allparts
+    
+    def __init__(self, path, create=True):
+        """
+        A class for convenient change into a tree of subdirectories including 
+        their creation.
+        
+        Parameters
+        ----------
+        path : str
+            Name of the folder which we want to open for working.
+        create : boolean, optional
+            Specifies if the directory (tree) should be created in case it
+            does not exist. The default is True.
 
-    def __init__(self, string=''):
-        """
-        Create a string stream with a initial value
-        :param string: (str) the initial value (default: "")
-        """
-        super(StringStream, self).__init__(initial_value=string)
-        self._pos = 0
-        self._remaining = 0
-        self._length = 0
+        Returns
+        -------
+        None.
 
-    def read(self, size=-1):
         """
-        Performs a read operation on the StringStream object. Blocks if not enough data is available
-        :param size: (int) number of characters to be read from the stream (default: -1)
-        :return: (str) data read from the StringStream object
-        """
-        while self._remaining < size:
-            # otherwise we block the python interpreter from doing anything
-            sleep(0.05)
-        result = super(StringStream, self).read()
-        # Increase position, from current position seek( ..., 1)
-        result_length = len(result)
-        # Increase position, and cosume
-        self._pos += result_length
-        self._remaining = self._length - self._pos
-        self.seek(self._pos)
-        return result
+        if not type(path) is str:
+            raise TypeError('Path must be specified as a string')
+        # split path into a list of directories
+        self._path = self.__split_path(path)
+        self._parent_dir = getcwd()
+        self._create = create
+        self._active = False
 
-    def write(self, s):
-        """
-        Write data to the StringStream object
-        :param s: (str) the data
-        """
-        write_length = len(s)
-        super(StringStream, self).write(s)
-        # After write file is at the end
-        # Seek from back and make it available
-        self._length += write_length
-        self._remaining = self._length - self._pos
+    def __enter__(self):        
+        # we go through all subdirectories
+        for sub in self._path:                        
+            if not exists(sub):
+                # if subdirectory doesn't exist, create it
+                if self._create:
+                    mkdir(sub)
+                else:
+                    raise Exception(f"The requested directory {sub} in {getcwd()}\
+                                    doesn't exist and you do not want me to create it.")
+            chdir(sub)
+            self._active = True
 
-    def readline(self, size=-1, block=True):
-        """
-        Reads a line from the StringStream object. Block if not a full line is available
-        :param size: (int) number of characters to read (default: -1)
-        :param block: (bool) wether to block until  a line is available (default: True)
-        :return: (str) the data read from the StringStream object
-        """
-        if self.tell() != self._pos:
-            self.seek(self._pos)
-        result = super(StringStream, self).readline()
-        result_length = len(result)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        chdir(self._parent_dir)
+        self._active = False
 
-        self._pos += result_length
-        self._remaining = self._length - self._pos
-        # Seek new position
-        self.seek(self._pos)
-        # if block:
-        #    while not result:
-        #        result = super(StringStream, self).readline()
-        #        sleep(0.025)
-        return result
+    @property
+    def active(self):
+        return self._active
 
+
+# Utility functions
+def grep(file, string):
+    """
+    A simple python implementation of the Linux `grep` command. It goes through
+    a (text) file and returns all lines containing a desired string as 
+    a generator.
+
+    Parameters
+    ----------
+    file : str
+        Name of the file to be opened for reading and searching of the string.
+    string : str
+        String to be searched for.
+
+    Yields
+    ------
+    line : str
+        (Next) line containing string `string` in the file `file`.
+
+    """    
+    with open(file, 'r') as f:
+        for line in f:
+            if string in line:
+                yield line
