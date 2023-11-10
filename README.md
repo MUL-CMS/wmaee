@@ -2,6 +2,12 @@
 
 A new generation of `wmaee`, version 2.0...
 
+## Getting the environment
+1. Install [miniforge](https://github.com/conda-forge/miniforge#install) with mamba solver
+2. Install recommended packages: `mamba env update --file env.yaml` <br />
+(This will not create a new conda environment, but instead update the current one! To install it into a new environment, use `mamba env --name wmaee --file env.yaml`)
+
+
 ## Basics of git
 ### Merging
 To merge branch `david` into `wmaee2`:
