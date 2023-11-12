@@ -1,18 +1,17 @@
+from typing import Any, Dict
+
 class DotDict(dict):
-    """
-    A custom dictionary class that allows accessing items using dot notation.
+    """A custom dictionary class that allows accessing items using dot notation.
 
     Example:
-    ```
-    my_dict = DotDict({"item": "value"})
-    item_value = my_dict.item
-    print(item_value)  # Output: "value"
-    ```
+    >>> my_dict = DotDict({"item": "value"})
+    >>> item_value = my_dict.item
+    >>> print(item_value)
+    "value"
     """
 
-    def __getattr__(self, attr):
-        """
-        Retrieve a dictionary item using dot notation.
+    def __getattr__(self, attr: str) -> Any:
+        """Retrieve a dictionary item using dot notation.
 
         Args:
             attr (str): The key for the item to retrieve.
@@ -24,10 +23,8 @@ class DotDict(dict):
             AttributeError: If the key does not exist in the dictionary.
 
         Example:
-        ```
-        my_dict = DotDict({"item": "value"})
-        item_value = my_dict.item
-        ```
+        >>> my_dict = DotDict({"item": "value"})
+        >>> item_value = my_dict.item
         """
         if attr in self:
             return self[attr]

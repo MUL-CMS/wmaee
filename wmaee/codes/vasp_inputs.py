@@ -1,34 +1,162 @@
+from wmaee.core.config import is_pmg_avail, Config
+from wmaee.core.io import working_directory
+from typing import Dict, Any, Optional, Union
+from ase import Atoms
+from ase.io import write
 import os
-import numpy as np
-import shutil
+from shutil import copyfileobj
 
-from pymatgen.io.vasp.inputs import Potcar, PotcarSingle
-from pymatgen.core.composition import Composition
-from pymatgen.core.structure import Structure
+# import numpy as np
+
+if is_pmg_avail():
+    from pymatgen.core import Structure
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from pymatgen.io.vasp import Potcar, PotcarSingle, Incar, Kpoints, Poscar
+
+# try:
+#     from pymatgen.core import Structure
+#     from pymatgen.io.ase import AseAtomsAdaptor
+#     from pymatgen.io.vasp import Potcar, PotcarSingle
+#     PymatgenType = Union[Structure, Atoms]
+#     PotcarType = Optional[Potcar]
+# except ImportError:
+#     # pymatgen is not installed
+#     PymatgenType = Any
+#     PotcarType = Any
 
 
-def write_automatic_kpoints_file(length: float):
-    '''
-    This function writes a KPOINTS file which generates
-    a regular Gamma-centered k-point mesh.
+# from pymatgen.io.vasp.inputs import Potcar, PotcarSingle
+# from pymatgen.core.composition import Composition
+# from pymatgen.core.structure import Structure
+
+
+
+def automatic_kpoints(length: float, write: bool = False) -> None:
+    """
+    Writes a KPOINTS file for generating a regular Gamma-centered k-point mesh.
 
     Parameters
-        ----------
-        length : float
-            Defines the length (R_k) that determines the subdevisions N1, N2, and N3.
+    ----------
+    length : float
+        The length (R_k) that determines the subdivisions N1, N2, and N3.
+    write : bool, optional
+        If True, writes the KPOINTS file; if False, returns the KPOINTS content as a string.
+        Default is False.
 
     Returns
-        -------
-        File named KPOINTS
+    -------
+    None or str
+        If write is True, writes the KPOINTS file and returns None.
+        If write is False, returns the KPOINTS content as a string.
+    """
+    kpts = 'Fully automatic mesh\n'
+    kpts += '0 # indicates automatic generation scheme\n'
+    kpts += 'Auto # fully automatic\n'
+    kpts += f'{length} # length (R_k)'
 
-    '''
-    with open('KPOINTS', 'w') as output:
-        output.write('Fully automatic mesh\n')
-        output.write('0 # indicates automatic generation scheme\n')
-        output.write('Auto # fully automatic\n')
-        output.write(f" {length} # length (R_k)")
+    if write:
+        with open('KPOINTS', 'w') as output:
+            output.write(kpts)
+    else:
+        return kpts
 
 
+def generate_potcar(struct: Union[Atoms, Any], 
+                    potcar_dir: Optional[str] = None,
+                    xc: Optional[str] = None, 
+                    potcar_mapping: Optional[Dict[str, str]] = {},
+                    write: Optional[bool] = True) -> Optional[Any]:
+    """
+    Generate a POTCAR file for VASP calculations based on the elements in the structure.
+
+    Parameters
+    ----------
+    struct : Union[ase.Atoms, pymatgen.Structure]
+        The structure for which POTCAR is to be generated. Can be either a pymatgen Structure or 
+        an ASE Atoms object.
+    potcar_dir : str, optional
+        The directory where the VASP POTCAR files are located.
+    xc : str, optional
+        The exchange-correlation functional. Defaults to value in defined in
+        `wmaee.config.yaml`.
+    potcar_mapping : dict, optional
+        An optional mapping of species to POTCARs, e.g. {'Fe': 'Fe_pv'}. 
+        For elements not explicitly specified, a default mapping {'X': 'X'}
+        will be applied.
+    write : bool, optional
+        Whether to write the POTCAR (into the current directory).
+
+    Returns
+    -------
+    pymatgen.Potcar or None
+        A Potcar object representing the POTCAR files for the elements in the structure 
+        if pymatgen is available. Otherwise, returns None.
+    """
+    
+    if potcar_dir == None:
+        # No POTCAR dir specified, let's get it from config
+        cfg = Config()
+        root = cfg.get('applications').get('vasp').get('potential_path')
+        if xc == None:
+            xc = cfg.get('applications').get('vasp').get('potentials').get('default')
+        xc_path = cfg.get('applications').get('vasp').get('potentials').get(xc)
+        potcar_dir = os.path.join(root, xc_path)
+    
+    pmg = is_pmg_avail()
+    
+    if pmg and isinstance(struct, Structure):
+        # structure is pymatgen.core.Structure, convert to ase.Atoms
+        struct = AseAtomsAdaptor.get_atoms(struct)
+    if not isinstance(struct, Atoms):
+        raise TypeError('Unknown structure type')
+    
+    # get list of species ordered as in structure
+    sp = [struct[0].symbol]
+    for s in struct[1:]:
+        if s.symbol != sp[-1]:
+            sp += [s.symbol]
+    for s in set(sp):
+        if s not in potcar_mapping.keys():
+            potcar_mapping[s] = s
+    if pmg:
+        # let's use pymatgen's engine to get dictionary of all 
+        # single POTCARs we need
+        potcars = {
+            X: PotcarSingle.from_file(os.path.join(potcar_dir, potcar_mapping[X], 'POTCAR')) 
+            for X in sp
+            }
+
+        # construct POTCAR
+        potcar = Potcar()
+        functionals = []
+        for X in sp:
+            potcar.append(potcars[X])
+            functionals.append(potcars[X].functional)
+        potcar.functional = functionals[0]
+
+        if write:
+            # Write the POTCAR to a file
+            with open('POTCAR', 'w') as outfile:
+                outfile.write(str(potcar))
+                
+        return potcar
+    
+    # pymatgen is not available; should we write POTCAR? If so, let's just 
+    # concatenate corresponding files
+    if write:
+        with open('POTCAR', 'w') as outfile:
+            for X in sp:
+                with open(os.path.join(potcar_dir, potcar_mapping[X], 'POTCAR'), 'r') as infile:
+                    copyfileobj(infile, outfile)
+
+    return None
+
+
+import deprecation
+from wmaee import __version__
+@deprecation.deprecated(deprecated_in="2.1", removed_in="3.0",
+                        current_version=__version__,
+                        details="Use native pyMatGen or ASE functions")
 def change_scale(filename: str, output_name: str, initial_scale: str, final_scale: str):
     '''
     This function changes the scale value in a POSCAR file. 
@@ -68,6 +196,11 @@ def change_scale(filename: str, output_name: str, initial_scale: str, final_scal
         output_file.write(modified_contents)
 
 
+import deprecation
+from wmaee import __version__
+@deprecation.deprecated(deprecated_in="2.1", removed_in="3.0",
+                        current_version=__version__,
+                        details="Use generate_potcar instead")
 def concat_potcar_files(poscar_in='POSCAR', potcar_out='POTCAR', potcar_path=os.getcwd()):
     '''
     Creates a POTCAR file from individual atomic POTCAR files according to 
@@ -122,78 +255,104 @@ def concat_potcar_files(poscar_in='POSCAR', potcar_out='POTCAR', potcar_path=os.
                     break
             if not found:
                 print(f"{element} not found in any potcar")
+                
 
-
-def generate_potcar(structure: Structure, potcar_dir: str, potcar_mapping: dict=None, write: bool=True) -> Potcar:
+def write_incar(incar: Dict[str, Any], filename: str = 'INCAR') -> None:
     """
-    Generate a POTCAR file for VASP calculations based on the elements in the structure.
-
-    Parameters:
-        structure : pymatgen.Structure
-            The structure for which POTCAR is to be generated.
-        potcar_dir : str
-            The directory where the VASP POTCAR files are located.
-        potcar_mapping : dict (optional, default: None)
-            An optional mapping of species to POTCARs, e.g. {'Fe': 'Fe_pv'}. 
-            For elements not explicitly specifies, a default mappig {'X': 'X'}
-            will be applied.
-        write : bool (optional, default: True)
-            Whether to write the POTCAR (into current directory).
-        
-
-    Returns:
-        pymatgen.Potcar:
-            A Potcar object representing the POTCAR files for the elements in the structure.
-    """
-    
-    
-    # get list of species as in in POSCAR
-    sp = [structure.sites[0].species_string]
-    for s in structure.sites[1:]:
-        if s.species_string != sp[-1]:
-            sp.append(s.species_string)
-    
-    # get dictionary of all single POTCARs we need
-    for s in set(sp):
-        if s not in potcar_mapping.keys():
-            potcar_mapping[s] = s
-    potcars = {
-       X: PotcarSingle.from_file(os.path.join(potcar_dir, potcar_mapping[X], 'POTCAR')) for X in sp
-    }
-
-    # construct POTCAR
-    potcar = Potcar()
-    functionals = []
-    for X in sp:
-        potcar.append(potcars[X])
-        functionals.append(potcars[X].functional)
-    potcar.functional = functionals[0]
-
-    if write:
-        # Write the POTCAR to a file
-        with open("POTCAR", "w") as f:
-            f.write(str(potcar))
-
-
-def write_incar(incar_in: dict, magnetism=False, incar_out='INCAR'):
-    '''
     Function writes an INCAR file.
 
     Parameters
-        ----------
-        incar_in : dict
-            Takes a dictionary of key value pairs specifing the INCAR file.
-        magnetism : boolean
-            Needs to be completed for magnetism = True!
-            If magnetism is True, then three additional parameters will be written
-            to INCAR file: MAGMOM, ISPIN, LORBIT. Default = False.
-        incar_out : str
-            The name of the final INCAR file. Default = INCAR
+    ----------
+    incar : Dict[str, Any]
+        A dictionary of key-value pairs specifying the INCAR file.
+    filename : str, optional
+        The name of the final INCAR file. Default is 'INCAR'.
 
     Returns
-        -------
-        File named INCAR.
-    '''
-    with open(incar_out, 'w') as f:
-        for key, value in incar_in.items():
-            f.write(key.replace(':', '=') + '=' + str(value) + '\n')
+    -------
+    None
+        Writes the INCAR file.
+    """
+    with open(filename, 'w') as f:
+        for key, value in incar.items():
+            f.write(f"{key} = {value}\n")
+
+            
+# Using Any in type definitions to make it run even 
+# in the case pymatgen is not installed
+def write_inputs(struct: Union[Atoms, Any],
+                 incar: Union[dict, Any],
+                 kpoints: Optional[Union[None, str, Any]] = None,
+                 potcar: Optional[Union[None, Any]] = None,
+                 xc: Optional[Union[str, None]] = None,
+                 potcar_mapping: Optional[Dict[str, str]] = {},
+                 directory: Optional[Union[None, str]] = None) -> None:
+    """
+    Write VASP input files.
+    Warning: If destination already contains any of the VASP inputs, they 
+    get overwritten!
+
+    Parameters
+    ----------
+    struct : Union[ase.Atoms, pymatgen.core.Structure, pymatgen.io.vasp.Poscar]
+        Atomic structure information.
+    incar : Union[dict, pymatgen.io.vasp.Incar]
+        INCAR file information.
+    kpoints : Optional[Union[None, str, pymatgen.io.vasp.Kpoints]], optional
+        KPOINTS file information (default is None). If equal to None, INCAR must 
+        contain k-points specification via KSPACING tag/
+    potcar : Optional[Union[None, pymatgen.io.vasp.Potcar]], optional
+        POTCAR file information (default is None and autogeneration based on 
+        struct is used).
+    xc : Optional[Union[str, None]], optional
+        Exchange-correlation functional information (default is None and the 
+        value is taken from wmaee.conf.yaml file).
+    potcar_mapping : Optional[Dict[str, str]], optional
+        Mapping of elements to POTCAR files (default is {}).
+    directory : Optional[Union[None, str]], optional
+        Directory to write files (default is None, e.g. current directory).
+
+    Returns
+    -------
+    None
+    """
+    
+    pmg = is_pmg_avail()
+    if directory == None:
+        directory = '.'
+    with working_directory(directory):
+        # POSCAR
+        if isinstance(struct, Atoms):
+            write(filename='POSCAR', images=struct, format='vasp')
+        elif pmg and isinstance(struct, Poscar):
+            struct.write_file(filename='POSCAR')
+            struct = struct.structure # for POTCAR generation
+        elif pmg and isinstance(struct, Structure):
+            struct.to(filename='POSCAR', fmt='poscar')
+        else:
+            raise TypeError('Unknown structure type')
+            
+        # INCAR
+        if isinstance(incar, dict):
+            write_incar(incar)
+        elif pmg and isinstance(incar, Incar):
+            incar.write_file(filename='INCAR')
+        else:
+            raise TypeError('Unknown incar type')
+        
+        # KPOINTS
+        if kpoints == None and 'KSPACING' not in incar:
+            raise ValueError('kpoints must be specified when KSPACING is not in incar')
+        elif isinstance(kpoints, str):
+            with open('KPOINTS', 'w') as output:
+                output.write(kpoints)
+        elif pmg and isinstance(kpoints, Kpoints):
+            kpoints.write_file(filename='KPOINTS')
+            
+        # POTCAR
+        if pmg and isinstance(potcar, Potcar):
+            with open('POTCAR', 'w') as outfile:
+                outfile.write(str(potcar))
+        else:
+            generate_potcar(struct=struct, xc=xc, 
+                            potcar_mapping=potcar_mapping, write=True)

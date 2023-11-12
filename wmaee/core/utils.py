@@ -41,49 +41,49 @@ def override_environ(*remove: str, **update):
         [env.pop(k) for k in remove_after]
 
 
-class working_directory(object):
-    """
-    A convenience class which syntactic sugar, allowing the user to change the directories.
-    Can also be nested.
-    """
+# class working_directory(object):
+#     """
+#     A convenience class which syntactic sugar, allowing the user to change the directories.
+#     Can also be nested.
+#     """
 
-    def __init__(self, name: Optional[str] = None, prefix: Optional[str] = None, delete: bool =False):
-        """
-        Constructs a working_directory object
-        :param name: name of the directory if None is given `os.getcwd()` will be used (default is `None`)
-        :type name: Optional[str]
-        :param prefix: a prefix where to locate the directory (default is `None`)
-        :type prefix: Optional[str]
-        :param delete: whether to delete the directory after a with clause (default is `False`)
-        :type delete: bool
-        """
-        self._name = str(uuid.uuid4()) if not name else name
-        self._delete = delete
-        self._curr_dir = os.getcwd()
-        self._active = False
-        if prefix is not None:
-            self._name = os.path.join(prefix, self._name)
+#     def __init__(self, name: Optional[str] = None, prefix: Optional[str] = None, delete: bool =False):
+#         """
+#         Constructs a working_directory object
+#         :param name: name of the directory if None is given `os.getcwd()` will be used (default is `None`)
+#         :type name: Optional[str]
+#         :param prefix: a prefix where to locate the directory (default is `None`)
+#         :type prefix: Optional[str]
+#         :param delete: whether to delete the directory after a with clause (default is `False`)
+#         :type delete: bool
+#         """
+#         self._name = str(uuid.uuid4()) if not name else name
+#         self._delete = delete
+#         self._curr_dir = os.getcwd()
+#         self._active = False
+#         if prefix is not None:
+#             self._name = os.path.join(prefix, self._name)
 
-    def __enter__(self):
-        if not os.path.exists(self._name):
-            os.mkdir(self._name)
-        os.chdir(self._name)
-        self._active = True
-        return self
+#     def __enter__(self):
+#         if not os.path.exists(self._name):
+#             os.mkdir(self._name)
+#         os.chdir(self._name)
+#         self._active = True
+#         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        os.chdir(self._curr_dir)
-        if self._delete:
-            shutil.rmtree(self._name)
-        self._active = False
+#     def __exit__(self, exc_type, exc_val, exc_tb):
+#         os.chdir(self._curr_dir)
+#         if self._delete:
+#             shutil.rmtree(self._name)
+#         self._active = False
 
-    @property
-    def name(self):
-        return self._name
+#     @property
+#     def name(self):
+#         return self._name
 
-    @property
-    def active(self):
-        return self._active
+#     @property
+#     def active(self):
+#         return self._active
 
 
 def merge(*dicts: Dict[Any, Any], factory: Type = dict, **kwargs) -> Dict[Any, Any]:

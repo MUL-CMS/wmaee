@@ -1,4 +1,3 @@
-
 applications:
   gpaw:
     potential_path: /home/dominik/.local/software/gpaw/potentials
@@ -7,4 +6,13 @@ applications:
     launch:
       args: ["NCPUS", "PREFIX"]
       script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
-
+  vasp:
+    potential_path: /home/david/work/VASP_potentials
+    potentials:
+      default: GGA-PBE
+      GGA-PBE: GGA-PBE/PAW_5.4
+      LDA: LDA/PAW_5.4
+    runner:
+      args: 
+        NCPUS: 2
+      script: "mpirun -np {{ NCPUS }} vasp_std"
