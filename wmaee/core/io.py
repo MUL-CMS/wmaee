@@ -2,7 +2,7 @@ from os import getcwd, mkdir, chdir
 from os.path import exists, split
 from uuid import uuid4
 from shutil import rmtree
-from typing import Optional, Generator
+from typing import Optional, Generator, List
 
 class working_directory:
     """
@@ -25,7 +25,7 @@ class working_directory:
         self._curr_dir: str = getcwd()
         self._active: bool = False
         
-    def _split_path(self, path: str) -> list[str]:
+    def _split_path(self, path: str) -> List[str]:
         """
         Helper function to split a string into a list of directories.
         
