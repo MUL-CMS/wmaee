@@ -39,7 +39,7 @@ class working_directory:
         list[str]
             List of directories.
         """
-        allparts: list[str] = []
+        allparts: List[str] = []
         while 1:
             parts = split(path)
             if parts[0] == path:  # Sentinel for absolute paths
