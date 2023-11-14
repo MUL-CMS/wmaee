@@ -1,161 +1,178 @@
 import os
-from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Dos, Xdatcar
-from pymatgen.io.vasp.inputs import Poscar
-from pymatgen.core.structure import Structure
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Any, Union
+
 from wmaee.core.data_structs import DotDict
-from monty.io import zopen
-import re
+from wmaee.core.config import is_pmg_avail
 
-def parse_output(vasp_dir: Optional[str] = None,
-                 parse_dos: bool = False,
-                 parse_ionic_steps: bool = False,
+if is_pmg_avail():
+    from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Outcar, Xdatcar
+    from pymatgen.io.vasp.inputs import Poscar
+
+# for fallback solutions if pymatgen is not available
+from ase.io.vasp import read_vasp, read_vasp_xml, read_vasp_out, read_vasp_xdatcar
+
+
+
+# if possible, always use pymatgen for parsing
+def parse_output(directory: Optional[str] = None,
+                 POSCAR: str = 'POSCAR',
+                 CONTCAR: str = 'CONTCAR',
+                 OSZICAR: str = 'OSZICAR',
+                 OUTCAR: str = 'OUTCAR',
+                 vasprun: str = 'vasprun.xml',
+                 XDATCAR: str = 'XDATCAR',                 
+                 ase_atoms: bool = False,
+                 parse_oszicar: bool = False,
                  parse_outcar: bool = False,
+                 parse_vasprun: bool = True,
+                 parse_vasprun_dos: bool = False,
+                 parse_xdatcar: bool = False,
                  return_DocDict: bool = True,
-                ) -> Dict[str, Union[float, Structure, int, List[Structure], Dos, Dict]]:
+                ) -> Union[DotDict, Dict[str, Any]]:
     """
-    Parse VASP output files in the specified directory using pymatgen.
+    Parse VASP output files and return relevant information.
 
-    Args:
-        vasp_dir (str, optional): The path to the directory containing VASP output files.
-            If not provided, the current working directory is used.
-        parse_dos (bool, optional): Whether to parse Density of States (DOS) from vasprun.xml. Defaults to False.
-        parse_ionic_steps (bool, optional): Whether to parse ionic relaxation steps from XDATCAR. Defaults to False.
-        parse_outcar_info (bool, optional): Whether to parse magnetization from OUTCAR. Defaults to False.
-        return_DocDict (bool, optional): Whether the result to return as wmaee.core.data_structs.DocDics 
-            (results.final_energy) or normal dictionary (results["final_energy"]). Defaults to True.
+    Parameters
+    ----------
+    directory : str or None, optional
+        The path to the directory containing VASP output files. If None, the current working directory is used.
+    POSCAR : str, optional
+        Name of the POSCAR file. Default is 'POSCAR'.
+    CONTCAR : str, optional
+        Name of the CONTCAR file. Default is 'CONTCAR'.
+    OSZICAR : str, optional
+        Name of the OSZICAR file. Default is 'OSZICAR'.
+    OUTCAR : str, optional
+        Name of the OUTCAR file. Default is 'OUTCAR'.
+    vasprun : str, optional
+        Name of the vasprun.xml file. Default is 'vasprun.xml'.
+    XDATCAR : str, optional
+        Name of the XDATCAR file. Default is 'XDATCAR'.
+    ase_atoms : bool, optional
+        Use ASE atoms instead of pymatgen structure if True. Default is False.
+    parse_oszicar : bool, optional
+        Parse ionic step energies from OSZICAR if True (only for pymatgen). Default is False.
+    parse_outcar : bool, optional
+        Parse final energies (and also magnetization if pymatgen is available) from OUTCAR if True. Default is False.
+    parse_vasprun : bool, optional
+        Parse vasprun.xml for ionic relaxation energies if True. Default is True.
+    parse_vasprun_dos : bool, optional
+        Parse DOS information from vasprun.xml if True (only if pymatgen is available). Default is False.
+    parse_xdatcar : bool, optional
+        Parse ionic relaxation steps from XDATCAR if True. Default is False.
+    return_DocDict : bool, optional
+        Return DotDict instead of a regular dictionary if True. Default is True.
 
-    Returns:
-        dict: A dictionary containing parsed information from VASP outputs.
+    Returns
+    -------
+    DotDict or dict
+        A DotDict or dictionary containing parsed information.
     """
+    
+    pmg = is_pmg_avail()
     output_data = {}
 
     # Use the current working directory if vasp_dir is not provided
-    if vasp_dir is None:
-        vasp_dir = os.getcwd()
+    if directory is None:
+        directory = os.getcwd()
+    directory = os.path.expanduser(directory)
 
     # Check if the directory exists
-    if not os.path.isdir(vasp_dir):
-        raise ValueError(f"Directory '{vasp_dir}' does not exist.")
+    if not os.path.isdir(directory):
+        raise ValueError('Directory '+directory+' does not exist.')
 
     # Parse initial and final structures from POSCAR and CONTCAR
-    poscar_initial_file = os.path.join(vasp_dir, "POSCAR")
-    if os.path.isfile(poscar_initial_file):
-        poscar_initial = Poscar.from_file(poscar_initial_file, check_for_POTCAR=False)
-        output_data["initial_structure"] = poscar_initial.structure
+    filename = os.path.join(directory, POSCAR)
+    if os.path.isfile(filename):
+        if pmg and not ase_atoms:
+            output_data['initial_structure'] = Poscar.from_file(filename=filename, check_for_POTCAR=False).structure
+        else:
+            output_data['initial_structure'] = read_vasp(filename)
 
-    poscar_final_file = os.path.join(vasp_dir, "CONTCAR")
-    if os.path.isfile(poscar_final_file):
-        poscar_final = Poscar.from_file(poscar_final_file, check_for_POTCAR=False)
-        output_data["final_structure"] = poscar_final.structure
+    filename = os.path.join(directory, CONTCAR)
+    if os.path.isfile(filename):
+        if pmg and not ase_atoms:
+            output_data['final_structure'] = Poscar.from_file(filename=filename, check_for_POTCAR=False).structure
+        else:
+            output_data['final_structure'] = read_vasp(filename)
+            
+    # Parse energies from OSZICAR if available - only pymatgen! - fast for energies
+    oszicar_file = os.path.join(directory, OSZICAR)
+    if parse_oszicar and pmg and os.path.isfile(oszicar_file):
+        oszicar = Oszicar(oszicar_file)
+        output_data['final_energy'] = oszicar.final_energy
+        output_data['ionic_step_energies'] = [s['E0'] for s in oszicar.ionic_steps]
+        
+    # Parse data from OUTCAR
+    if parse_outcar:
+        filename = os.path.join(directory, OUTCAR)
+        if os.path.isfile(filename):
+            if pmg:
+                # pymatgen parser
+                outcar = Outcar(filename)
+                output_data['total_magnetization'] = outcar.total_mag
+                output_data['magnetization'] = outcar.magnetization
+                output_data['final_energy'] = outcar.final_energy
+            else:
+                # ase (limited) parser
+                outcar = read_vasp_out(filename, index=slice(None))
+                energies = []
+                forces = []
+                stress = []
+                for s in outcar:
+                    energies.append(s.calc.get_potential_energy())
+                    forces.append(s.calc.get_forces())
+                    stress.append(s.calc.get_stress())
+                output_data['final_energy'] = energies[-1]
+                output_data['ionic_step_energies'] = energies
+                output_data['ionic_step_forces'] = forces
+                output_data['ionic_step_stress'] = stress
+                # output_data['final_energy'] = outcar.calc.get_potential_energy()
 
     # Parse vasprun.xml for electronic structure information and DOS if enabled
-    vasprun_file = os.path.join(vasp_dir, "vasprun.xml")
-    if parse_dos:
-        if os.path.isfile(vasprun_file):
-            vasprun = Vasprun(vasprun_file, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False)
-            dos = vasprun.complete_dos
-            output_data["total_dos"] = dos
-            output_data["final_energy"] = vasprun.final_energy # first try to read final energy
-
-    # Parse INCAR and KPOINTS settings, and final magnetization from OUTCAR if enabled
-    if parse_outcar:
-        outcar_file = os.path.join(vasp_dir, "OUTCAR")
-        if os.path.isfile(outcar_file):
-            outcar = Outcar(outcar_file)
-            output_data["total_magnetization"] = outcar.total_mag
-            output_data["magnetization"] = outcar.magnetization
-            output_data["final_energy"] = outcar.final_energy # second try to read final energy
-
-    # Parse Oszicar for final energy if available
-    oszicar_file = os.path.join(vasp_dir, "OSZICAR")
-    if oszicar_file and os.path.isfile(oszicar_file):
-        oszicar = Oszicar(oszicar_file)
-        output_data["final_energy"] = oszicar.final_energy # third and final try to read final energy
-        output_data["ionic_steps_energies"] = oszicar.ionic_steps
-        output_data["electronic_steps_energies"] = oszicar.electronic_steps
-
-    # Parse ionic relaxation steps from XDATCAR if enabled
-    if parse_ionic_steps:
-        xdatcar_file = os.path.join(vasp_dir, "XDATCAR")
-        if os.path.isfile(xdatcar_file):
-            xdatcar = Xdatcar(xdatcar_file)
+    filename = os.path.join(directory, vasprun)
+    if parse_vasprun and os.path.isfile(filename):
+        if pmg: # pymatgen parser
+            if parse_vasprun_dos:
+                vrun = Vasprun(filename=filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False, parse_dos=True)
+                dos = vrun.complete_dos
+                output_data['total_dos'] = dos
+            else:
+                vrun = Vasprun(filename=filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False, parse_dos=False)
+            output_data['final_energy'] = vrun.final_energy # first try to read final energy
+            output_data['ionic_step_energies'] = [s['e_0_energy'] for s in vrun.ionic_steps]
+            if 'forces' in vrun.ionic_steps[0].keys():
+                output_data['ionic_step_forces'] = [s['forces'] for s in vrun.ionic_steps]
+            if 'stress' in vrun.ionic_steps[0].keys():
+                output_data['ionic_step_stress'] = [s['stress'] for s in vrun.ionic_steps]
+        else: # ase parser
+            vrun = read_vasp_xml(filename, index=slice(None))
+            energies = []
+            forces = []
+            stress = []
+            for s in vrun:
+                energies.append(s.calc.get_potential_energy())
+                forces.append(s.calc.get_forces())
+                stress.append(s.calc.get_stress())
+            output_data['final_energy'] = energies[-1]
+            output_data['ionic_step_energies'] = energies
+            output_data['ionic_step_forces'] = forces
+            output_data['ionic_step_stress'] = stress
+            
+    # Parse ionic relaxation steps from XDATCAR
+    filename = os.path.join(directory, XDATCAR)
+    if parse_xdatcar and os.path.isfile(filename):
+        if pmg:
+            # pymatgen
+            xdatcar = Xdatcar(filename)
             structures = xdatcar.structures
-            output_data["ionic_relaxation_steps"] = structures
+        else:
+            # ase
+            structures = read_vasp_xdatcar(filename, index=slice(None))
+        output_data['ionic_relaxation'] = structures
+            
 
     if return_DocDict:
         return DotDict(output_data)
     else:
         return output_data
-    
-
-
-def parse_forces(OUTCAR: bool = False, 
-                 filename: str = None, 
-                 last: bool = False
-                ) -> Union[List[List[List[float]]], List[List[float]]]:
-    """
-    Parse forces from VASP OUTCAR or vasprun.xml files.
-
-    Args:
-        OUTCAR (bool): If True, parse forces from OUTCAR; if False, parse from vasprun.xml.
-        filename (str, optional): The name of the file to parse forces from. If None, uses 
-            default filenames ('OUTCAR' or 'vasprun.xml').
-        last (bool, optional): If True, return only forces for the last step; if False, return forces for all steps.
-
-    Returns:
-        Union[List[List[List[float]], List[List[float]]]: 
-        - A list of forces for all steps from the specified file if last is False.
-        - Forces for the last step from the specified file if last is True.
-    """
-    if OUTCAR:
-        # parsing from OUTCAR
-        if filename == None:
-            # default filename
-            filename = 'OUTCAR'
-        # below definition taken of regex from https://gist.github.com/gVallverdu/0e232988f32109b5dc6202cf193a49fb
-        header_pattern = r"\sPOSITION\s+TOTAL-FORCE \(eV/Angst\)\n\s-+"
-        row_pattern = r"\s+[+-]?\d+\.\d+\s+[+-]?\d+\.\d+\s+[+-]?\d+\.\d+\s+([+-]?\d+\.\d+)\s+([+-]?\d+\.\d+)\s+([+-]?\d+\.\d+)"
-        footer_pattern = r"\s--+"
-        postprocess = lambda x: float(x)
-        table_pattern_text = header_pattern + r"\s*^(?P<table_body>(?:\s+" + row_pattern + r")+)\s+" + footer_pattern
-        table_pattern = re.compile(table_pattern_text, re.MULTILINE | re.DOTALL)
-        rp = re.compile(row_pattern)
-        # below is part of the pymatgen.io.vasp.Outcar.read_table_pattern() function
-        with zopen(filename, "rt") as f:
-            text = f.read()
-        forces = []
-        for mt in table_pattern.finditer(text):
-            table_body_text = mt.group("table_body")
-            table_contents = []
-            for line in table_body_text.split("\n"):
-                ml = rp.search(line)
-                # skip empty lines
-                if not ml:
-                    continue
-                d = ml.groupdict()
-                if len(d) > 0:
-                    processed_line = {k: postprocess(v) for k, v in d.items()}
-                else:
-                    processed_line = [postprocess(v) for v in ml.groups()]
-                table_contents.append(processed_line)
-            forces.append(table_contents)
-        if last:
-            # return only last forces
-            return forces[-1]
-        else:
-            # return forces for all steps
-            return forces
-    else:
-        # parsing from vasprun.xml
-        if filename == None:
-            # default filename
-            filename = 'vasprun.xml'
-        vrun = Vasprun(filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False)
-        tr = vrun.get_trajectory()
-        if last:
-            # return only last forces
-            return tr[-1].site_properties['forces']
-        else:
-            # return forces for all steps
-            return [step.site_properties['forces'] for step in tr]

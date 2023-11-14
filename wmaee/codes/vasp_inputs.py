@@ -320,6 +320,7 @@ def write_inputs(struct: Union[Atoms, Any],
     pmg = is_pmg_avail()
     if directory == None:
         directory = '.'
+    directory = os.path.expanduser(directory)
     with working_directory(directory):
         # POSCAR
         if isinstance(struct, Atoms):
