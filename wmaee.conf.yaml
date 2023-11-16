@@ -10,8 +10,8 @@ applications:
     potential_path: /home/david/work/VASP_potentials
     potentials:
       default: GGA-PBE
-      GGA-PBE: GGA-PBE/PAW_5.4
-      LDA: LDA/PAW_5.4
+      GGA-PBE: GGA-PBE/PAW_6.4
+      LDA: LDA/PAW_6.4
     runner:
       args: 
         NCPUS: 2

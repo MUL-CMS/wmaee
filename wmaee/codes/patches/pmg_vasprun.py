@@ -4,7 +4,11 @@ from wmaee.core.config import is_pmg_avail
 if is_pmg_avail():
 
     from pymatgen.io.vasp.outputs import *
-    from pymatgen.io.vasp.outputs import _parse_varray
+    try:
+        from pymatgen.io.vasp.outputs import _parse_varray
+    except:
+        # the function has been renamed in v2023.11.12
+        from pymatgen.io.vasp.outputs import _parse_vasp_array as _parse_varray
 
     # Added lines: 105--106
     def _parse_patch(self, stream, parse_dos, parse_eigen, parse_projected_eigen):
