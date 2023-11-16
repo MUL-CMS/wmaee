@@ -1,7 +1,5 @@
 from setuptools import setup, find_packages
 
-from _version import __version__
-
 setup(
     name='wmaee',
     version='2.1',
