@@ -1,130 +1,246 @@
 """
-Convenient functions for fitting the energy-volume calculations.
+Convenient functions for fitting the energy-volume data.
 """
 
-
 import numpy as np
-from typing import *
 from scipy.optimize import curve_fit
+from typing import Tuple, Optional, Iterable, Callable
 from numpy.typing import ArrayLike, NDArray
 
 
-def murnaghan_fit(volumes: np.ndarray, energies: np.ndarray):
+def eos_birch_murnaghan(V: ArrayLike, E0: float, V0: float, B0: float, Bp: float) -> NDArray:
     """
-    This function takes two arguments in np.ndarray format, 
-    performs a Murnaghan EoS fit, and returns 
-    E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit.
+    Birch-Murnaghan equation of state.
 
-    E_eq ... equilibrium energy.
-    V_eq ... equilibrium volume.
-    B_eq ... equilibrium bulk modulus.
-    Bp_eq .. pressure derivative of the equilibrium bulk modulus.
+    Parameters
+    ----------
+    V : ArrayLike
+        Volume value(s).
+    E0 : float
+        Equilibrium energy.
+    V0 : float
+        Equilibrium volume.
+    B0 : float
+        Equilibrium bulk modulus.
+    Bp : float
+        Pressure derivative of the equilibrium bulk modulus.
 
-    V_fit and E_fit are generated volumes and with the fitted
-    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
-    V_fit and E_fit can then be used for plotting the fit. 
+    Returns
+    -------
+    NDArray
+        Energies corresponding to the given volumes.
+
+    Notes
+    -----
+    The Birch-Murnaghan equation of state is given by:
+    E(V) = E0 + (9*B0*V0/16) * (((V0/V)**(2/3) - 1)**3 * Bp + ((V0/V)**(2/3) - 1)**2 * (6 - 4*(V0/V)**(2/3)))
+    where E(V) is the energy as a function of volume (V).
     """
-
-    # Defining the Murnaghan equation of state function
-    def murnaghan_eos(V, E0, V0, B0, Bp):
-        return E0 + B0*V0*(1/(Bp*(Bp-1))*(V/V0)**(1-Bp) + V/(Bp*V0) - 1/(Bp-1))
-
-    # Finding V0 and E0
-    E0 = np.min(energies)
-    min_index = np.argmin(energies)
-    V0 = volumes[min_index]
-
-    # Initial guesses
-    p_in = [E0, V0, 1, 3.5]
-
-    # Fitting the data to the Murnaghan equation of state
-    p_opt, p_cov = curve_fit(murnaghan_eos, volumes, energies, p0=p_in)
-
-    # Extracting fitted parameters
-    E_eq = p_opt[0]
-    V_eq = p_opt[1]
-    B_eq = p_opt[2]
-    Bp_eq = p_opt[3]
-
-    # Calculating the standard deviation of the fitted parameters
-    p_err = np.sqrt(np.diag(p_cov))
-
-    print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
-
-    # Preparing the values for the plot
-    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
-    E_fit = murnaghan_eos(V_fit, E_eq, V_eq, B_eq, Bp_eq)
-
-    return E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit
-
-###############################################################################
+    return E0 + (9 * B0 * V0 / 16) * (((V0 / V)**(2/3) - 1)**3 * Bp + ((V0 / V)**(2/3) - 1)**2 * (6 - 4 * (V0 / V)**(2/3)))
 
 
-def birch_murnaghan_fit_(volumes: ArrayLike, energies: ArrayLike) -> Tuple[float, float, float, float, NDArray, NDArray]:
+def birch_murnaghan_fit(volumes: ArrayLike,
+                        energies: ArrayLike,
+                        p0: Optional[Iterable[float]] = None,
+                        show_errors: bool = False,
+                        eos_function: bool = False) -> Tuple[Iterable[float], Callable[[NDArray], NDArray]]:
     """
-    This function takes two arguments in np.ndarray format, 
-    performs a Birch-Murnaghan EoS fit, and returns 
-    E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit.
+    Perform a Birch-Murnaghan fit on a given set of volumes and energies.
+
+    Parameters
+    ----------
+    volumes : ArrayLike
+        Volumes.
+    energies : ArrayLike
+        Energies.
+    p0 : Optional[Iterable[float]], optional
+        Starting parameters in the order E0_guess, V0_guess, B0_guess, Bp_guess, by default None.
+        If not provided, default values are calculated based on the input data.
+    show_errors : bool, optional
+        Whether to print the standard deviation of the fitted parameters, by default False.
+    eos_function : bool, optional
+        Whether to return the EOS function as a callable, by default False.
+
+    Returns
+    -------
+    Tuple[Iterable[float], Callable[[NDArray], NDArray]]
+        Tuple containing the optimum parameters and, optionally, the EOS function.
+
+    optimum : Iterable[float]
+        Optimal parameters E0, V0, B0, Bp.
+    eos_function : Callable[[NDArray], NDArray], optional
+        The EOS function as a callable.
+
+    Notes
+    -----
+    The Birch-Murnaghan equation of state is used for fitting.
+
+    If `eos_function` is True, the function returns the EOS function as a callable.
+
+    If `show_errors` is True, the function prints the standard deviation of the fitted parameters.
+    
+    If `p0` is not provided, default values are calculated as follows:
+    - V0_guess: (np.amin(volumes) + np.amax(volumes))/2
+    - E0_guess: np.amin(energies)
+    - B0_guess: 1  # Presumably in eV/Ang^3; 160.2 in GPa
+    - Bp_guess: 1
+    """ 
+    if p0 is None:
+        V0_guess = (np.amin(volumes) + np.amax(volumes))/2
+        E0_guess = np.amin(energies)
+        B0_guess = 1  # Presumably in eV/Ang^3; 160.2 in GPa
+        Bp_guess = 1
+        p0 = (E0_guess, V0_guess, B0_guess, Bp_guess)
+
+    optimum, p_cov = curve_fit(eos_birch_murnaghan, np.array(volumes), np.array(energies), p0=p0)
+    
+    if show_errors:
+        p_err = np.sqrt(np.diag(p_cov))
+        print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
+
+    if eos_function:
+        return optimum, lambda V: eos_birch_murnaghan(V, *optimum)
+    
+    return optimum
 
 
-    E_eq ... equilibrium energy.
-    V_eq ... equilibrium volume.
-    B_eq ... equilibrium bulk modulus.
-    Bp_eq .. pressure derivative of the equilibrium bulk modulus.
 
-    V_fit and E_fit are generated volumes and with the fitted
-    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
-    V_fit and E_fit can then be used for plotting the fit. 
+def eos_murnaghan(V: ArrayLike, E0: float, V0: float, B0: float, Bp: float) -> NDArray:
     """
+    Murnaghan equation of state.
 
-    # Defining the Birch-Murnaghan equation of state function
-    def birch_murnaghan_eos(V, E0, V0, B0, Bp):
-        return E0 + (9*B0*V0/16)*(((V0/V)**(2/3)-1)**3*Bp + ((V0/V)**(2/3)-1)**2*(6-4*(V0/V)**(2/3)))
+    Parameters
+    ----------
+    V : ArrayLike
+        Volume value(s).
+    E0 : float
+        Equilibrium energy.
+    V0 : float
+        Equilibrium volume.
+    B0 : float
+        Equilibrium bulk modulus.
+    Bp : float
+        Pressure derivative of the equilibrium bulk modulus.
 
-    # Finding V0 and E0
-    E0 = np.min(energies)
-    min_index = np.argmin(energies)
-    V0 = volumes[min_index]
+    Returns
+    -------
+    NDArray
+        Energies corresponding to the given volumes.
 
-    # Initial guesses
-    p_in = [E0, V0, 1, 3.5]
-
-    # Fitting the data to the Murnaghan equation of state
-    p_opt, p_cov = curve_fit(birch_murnaghan_eos, volumes, energies, p0=p_in)
-
-    # Extracting fitted parameters
-    E_eq, V_eq, B_eq, Bp_eq = p_opt
-
-    # Calculating the standard deviation of the fitted parameters
-    p_err = np.sqrt(np.diag(p_cov))
-
-    print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
-
-    # Preparing the values for the plot
-    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
-    E_fit = birch_murnaghan_eos(V_fit, E_eq, V_eq, B_eq, Bp_eq)
-
-    return E_eq, V_eq, B_eq, Bp_eq, V_fit, E_fit
-
-
-def polynomial_fit(volumes: ArrayLike, energies: ArrayLike, order: int = 3):
+    Notes
+    -----
+    The Murnaghan equation of state is given by:
+    E(V) = E0 + B0 * V0 * (1/(Bp*(Bp-1)) * (V/V0)**(1-Bp) + V/(Bp*V0) - 1/(Bp-1))
+    where E(V) is the energy as a function of volume (V).
     """
-    This function takes two arguments in np.ndarray format, 
-    performs a polynomial fit, and returns 
-    E_eq, V_eq, B_eq, V_fit, E_fit.
-    The third parameter is the order of the polynomial and is optional.
-    The order should be higher than 2, because the E-V curves 
-    typically don't have a quadratic shape! 
+    return E0 + B0 * V0 * (1/(Bp * (Bp - 1)) * (V / V0)**(1 - Bp) + V / (Bp * V0) - 1 / (Bp - 1))
 
-    E_eq ... equilibrium energy.
-    V_eq ... equilibrium volume.
-    B_eq ... equilibrium bulk modulus.
 
-    V_fit and E_fit are generated volumes and with the fitted
-    values E_eq, V_eq, B_eq, Bp_eq calculated corresponding energies.
-    V_fit and E_fit can then be used for plotting the fit. 
+
+def murnaghan_fit(volumes: ArrayLike,
+                  energies: ArrayLike,
+                  p0: Optional[Iterable[float]] = None,
+                  show_errors: bool = False,
+                  eos_function: bool = False) -> Tuple[Iterable[float], Callable[[NDArray], NDArray]]:
     """
+    Perform a Murnaghan fit on a given set of volumes and energies.
 
+    Parameters
+    ----------
+    volumes : ArrayLike
+        Volumes.
+    energies : ArrayLike
+        Energies.
+    p0 : Optional[Iterable[float]], optional
+        Starting parameters in the order E0_guess, V0_guess, B0_guess, Bp_guess, by default None.
+        If not provided, default values are calculated based on the input data.
+    show_errors : bool, optional
+        Whether to print the standard deviation of the fitted parameters, by default False.
+    eos_function : bool, optional
+        Whether to return the EOS function as a callable, by default False.
+
+    Returns
+    -------
+    Tuple[Iterable[float], Callable[[NDArray], NDArray]]
+        Tuple containing the optimum parameters and, optionally, the EOS function.
+
+    optimum : Iterable[float]
+        Optimal parameters E0, V0, B0, Bp.
+    eos_function : Callable[[NDArray], NDArray], optional
+        The EOS function as a callable.
+
+    Notes
+    -----
+    The Murnaghan equation of state is used for fitting.
+
+    If `eos_function` is True, the function returns the EOS function as a callable.
+
+    If `show_errors` is True, the function prints the standard deviation of the fitted parameters.
+
+    If `p0` is not provided, default values are calculated as follows:
+    - V0_guess: (np.amin(volumes) + np.amax(volumes))/2
+    - E0_guess: np.amin(energies)
+    - B0_guess: 1  # Presumably in eV/Ang^3; 160.2 in GPa
+    - Bp_guess: 1
+    """
+    if p0 is None:
+        V0_guess = (np.amin(volumes) + np.amax(volumes))/2
+        E0_guess = np.amin(energies)
+        B0_guess = 1  # Presumably in eV/Ang^3; 160.2 in GPa
+        Bp_guess = 1
+        p0 = (E0_guess, V0_guess, B0_guess, Bp_guess)
+
+    optimum, p_cov = curve_fit(eos_murnaghan, np.array(volumes), np.array(energies), p0=p0)
+    
+    if show_errors:
+        p_err = np.sqrt(np.diag(p_cov))
+        print(f'Standard deviation of E0, V0, B0, Bp = {p_err}')
+
+    if eos_function:
+        return optimum, lambda V: eos_murnaghan(V, *optimum)
+    
+    return optimum
+
+
+def polynomial_fit(volumes: ArrayLike,
+                   energies: ArrayLike,
+                   order: int = 3,
+                   eos_function: bool = False) -> Tuple[float, float, float, Optional[Callable[[NDArray], NDArray]]]:
+    """
+    Perform a polynomial fit on a given set of volumes and energies.
+
+    Parameters
+    ----------
+    volumes : ArrayLike
+        Volumes.
+    energies : ArrayLike
+        Energies.
+    order : int, optional
+        Order of the polynomial fit, by default 3.
+    eos_function : bool, optional
+        Whether to return the EOS function as a callable, by default False.
+
+    Returns
+    -------
+    Tuple[float, float, float, Optional[Callable[[NDArray], NDArray]]]
+        Tuple containing the equilibrium energy, equilibrium volume, bulk modulus,
+        and, optionally, the EOS function.
+
+    E_eq : float
+        Equilibrium energy.
+    V_eq : float
+        Equilibrium volume.
+    B_eq : float
+        Bulk modulus.
+    eos_function : Callable[[NDArray], NDArray], optional
+        The EOS function as a callable.
+
+    Notes
+    -----
+    The function performs a polynomial fit of the data and calculates equilibrium properties.
+
+    If `eos_function` is True, the function returns the EOS function as a callable.
+    """
     # Extract the smallest and the biggest volume
     V_min = np.amin(volumes)
     V_max = np.amax(volumes)
@@ -147,11 +263,11 @@ def polynomial_fit(volumes: ArrayLike, energies: ArrayLike, order: int = 3):
     V_eq = float(roots[v_min_indices])
 
     # Further, we can now evaluate the polynomial at V_eq
-    # to get the equilubrium energy
+    # to get the equilibrium energy
     E_eq = np.polyval(coefficients, V_eq)
 
-    # Now, we will calculate the bulk modulus, B0
-    # In general, B = - V*(dp/dV)
+    # Now, we will calculate the bulk modulus, B_eq
+    # In general, B_eq = - V_eq * (dp/dV)
     # p(V) = first derivative, hence dp/dV is the second
     # derivative of the energy polynomial
     second_derivative = np.polyder(coefficients, 2)
@@ -159,36 +275,9 @@ def polynomial_fit(volumes: ArrayLike, energies: ArrayLike, order: int = 3):
     # Calculating the bulk modulus
     B_eq = -V_eq * (-np.polyval(second_derivative, V_eq))
 
-    # Preparing the values for the plot
-    V_fit = np.linspace(np.min(volumes), np.max(volumes), 100)
-    E_fit = np.polyval(coefficients, V_fit)
-
-    return E_eq, V_eq, B_eq, V_fit, E_fit
-
-
-def birch_murnaghan(volumes: ArrayLike, e0: float, v0: float, b0: float, bp: float):
-    two_thirds = 2/3
-    return e0 + (9 * v0 * b0 / 16) * (bp * ((volumes / v0) ** two_thirds - 1) ** 3 + ((volumes / v0) ** two_thirds - 1) ** 2 * (6 - 4 * (volumes / v0) ** two_thirds))
-
-
-def birch_murnaghan_fit(volumes: ArrayLike, energies: ArrayLike, p0: Optional[Iterable[float]] = None) -> Tuple[Iterable[float], Callable[[NDArray], NDArray]]:
-    """
-    Performs a Birch-Murnaghan-fit on a given set of volumes and energies
-    :param volumes: volumes
-    :type volumes: ArrayLike
-    :param energies: energies
-    :type energies: ArrayLike
-    :param p0: (iterable) starting parameters in the order E0_guess, V0_guess, B0_guess, Bp_guess (default: None)
-    :param return_analytic: (bool) wether also to return a SymPy analytic expression of the fit
-    :return: (optimum:np.array, E(V):callable, optional analytic:Sympy.Expression)
-    """
-
-    if p0 is None:
-        V0_guess = np.amin(volumes)
-        E0_guess = np.amin(energies)
-        B0_guess = 100
-        Bp_guess = 1
-        p0 = (E0_guess, V0_guess, B0_guess, Bp_guess)
-
-    optimum, _ = curve_fit(birch_murnaghan, np.array(volumes), np.array(energies), p0=p0)
-    return optimum, lambda volumes: birch_murnaghan(volumes, *optimum)
+    fitted_params = (E_eq, V_eq, B_eq)
+    
+    if eos_function:
+        return fitted_params, lambda V: np.polyval(coefficients, V)
+    
+    return fitted_params
