@@ -9,4 +9,5 @@
 # __all__ = ["Atoms", "GpawCalculation", "VaspCalculation", "MDCalculation", "UnmetRequirement", "show", "show_traj",
 #            "available_models", "available_lammps_models", "md", "AbinitCalculation", "bulk"]
 
-from _version import __version__
+__version__ = '2.1'
+#from _version import __version__

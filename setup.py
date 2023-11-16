@@ -4,7 +4,7 @@ from _version import __version__
 
 setup(
     name='wmaee',
-    version=__version__,
+    version='2.1',
     description='A collection of evaluation scripts for MUL-CMS group',
     author_email='david.holec@unileoben.ac.at',
     license='MIT',
