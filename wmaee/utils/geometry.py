@@ -4,8 +4,8 @@ import numpy as np
 from ase import Atoms
 from typing import Union, Tuple, Dict, Any
 
-from wmaee.core.config import is_pmg_avail
-if is_pmg_avail():
+from wmaee.core.requirements import test_pmg
+if test_pmg():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
 
@@ -40,7 +40,7 @@ def find_neighbors(atoms: Union[Atoms, Any],
         - 'images': Indices of periodic images of neighboring atoms.
         - 'vecs': Vectors pointing from the central atom to its neighbors.
     """
-    if is_pmg_avail() and isinstance(atoms, Structure):
+    if test_pmg() and isinstance(atoms, Structure):
         atoms = AseAtomsAdaptor.get_atoms(atoms)
 
     a, b, c = atoms.cell

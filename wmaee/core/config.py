@@ -67,19 +67,3 @@ class Config:
             Value associated with the specified key.
         """
         return self._config.get(items)
-
-    
-def is_pmg_avail() -> bool:
-    """
-    Check if pymatgen is available.
-
-    Returns
-    -------
-    bool
-        True if pymatgen is available, False otherwise.
-    """
-    try:
-        import pymatgen        
-    except ModuleNotFoundError:
-        return False
-    return True

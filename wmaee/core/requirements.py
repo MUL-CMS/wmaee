@@ -1,6 +1,5 @@
 
 import functools
-from frozendict import frozendict
 
 
 class UnmetRequirement(Exception):
@@ -45,13 +44,29 @@ def test_nglview() -> bool:
         return False
     else:
         return True
+    
+def test_pmg() -> bool:
+    """
+    Check if pymatgen is available.
+
+    Returns
+    -------
+    bool
+        True if pymatgen is available, False otherwise.
+    """
+    try:
+        import pymatgen        
+    except ImportError:
+        return False
+    return True    
 
 
-REQUIREMENTS = frozendict(
+REQUIREMENTS = dict(
     gpaw=test_gpaw,
     kimpy=test_kimpy,
     kim_query=test_kim_query,
-    nglview=test_nglview
+    nglview=test_nglview,
+    pymatgen=test_pmg
 )
 
 

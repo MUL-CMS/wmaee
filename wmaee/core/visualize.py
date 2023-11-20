@@ -7,7 +7,7 @@ import numpy as np
 from ase.io import Trajectory
 from matplotlib.colors import rgb2hex
 from scipy.interpolate import interp1d
-from wmaee.core.interfaces.requirements import requires
+from wmaee.core.requirements import requires
 
 __author__ = "Joerg Neugebauer, Sudarsan Surendralal"
 __copyright__ = (

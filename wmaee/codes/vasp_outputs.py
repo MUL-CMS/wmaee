@@ -2,9 +2,9 @@ import os
 from typing import Optional, Dict, Any, Union
 
 from wmaee.core.data_structs import DotDict
-from wmaee.core.config import is_pmg_avail
+from wmaee.core.requirements import test_pmg
 
-if is_pmg_avail():
+if test_pmg():
     from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Outcar, Xdatcar
     from pymatgen.io.vasp.inputs import Poscar
 
@@ -69,7 +69,7 @@ def parse_output(directory: Optional[str] = None,
         A DotDict or dictionary containing parsed information.
     """
     
-    pmg = is_pmg_avail()
+    pmg = test_pmg()
     output_data = {}
 
     # Use the current working directory if vasp_dir is not provided

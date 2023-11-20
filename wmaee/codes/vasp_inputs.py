@@ -1,4 +1,5 @@
-from wmaee.core.config import is_pmg_avail, Config
+from wmaee.core.config import Config
+from wmaee.core.requirements import test_pmg
 from wmaee.core.io import working_directory
 from typing import Dict, Any, Optional, Union
 from ase import Atoms
@@ -8,7 +9,7 @@ from shutil import copyfileobj
 
 # import numpy as np
 
-if is_pmg_avail():
+if test_pmg():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
     from pymatgen.io.vasp import Potcar, PotcarSingle, Incar, Kpoints, Poscar
@@ -102,7 +103,7 @@ def generate_potcar(struct: Union[Atoms, Any],
         xc_path = cfg.get('applications').get('vasp').get('potentials').get(xc)
         potcar_dir = os.path.join(root, xc_path)
     
-    pmg = is_pmg_avail()
+    pmg = test_pmg()
     
     if pmg and isinstance(struct, Structure):
         # structure is pymatgen.core.Structure, convert to ase.Atoms
@@ -317,7 +318,7 @@ def write_inputs(struct: Union[Atoms, Any],
     None
     """
     
-    pmg = is_pmg_avail()
+    pmg = test_pmg()
     if directory == None:
         directory = '.'
     directory = os.path.expanduser(directory)

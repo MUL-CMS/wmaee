@@ -11,7 +11,7 @@ from ase.calculators.vasp import Vasp
 from wmaee.core.interfaces.abinit import Abinit
 from ase.calculators.calculator import Calculator, all_changes
 
-from wmaee.core.interfaces.requirements import requires
+from wmaee.core.requirements import requires
 from wmaee.core.interfaces.utils import Config, render_command
 from wmaee.core.utils import override_environ, working_directory
 

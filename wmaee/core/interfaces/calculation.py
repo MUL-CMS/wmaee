@@ -15,7 +15,7 @@ from ase.io.trajectory import TrajectoryReader, TrajectoryWriter
 
 from wmaee.units import HARTREE_TO_EV
 from wmaee.core.utils import merge, override_environ
-from wmaee.core.interfaces.requirements import requires
+from wmaee.core.requirements import requires
 from wmaee.core.interfaces.abinit_netcdf_trajectory import AbinitNetCDF4TrajectoryReader
 from wmaee.core.interfaces.runners import vasp, launch, write_input, read_results_vasp, gpaw, construct_calculator, abinit, read_results_abinit, calculate
 
