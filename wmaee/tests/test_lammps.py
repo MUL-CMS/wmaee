@@ -1,11 +1,11 @@
 from wmaee.core.io import working_directory
-from wmaee.codes.lammps_potential import *
-from wmaee.codes.lammps_runner import run_lammps
+import wmaee.codes.lammps as lammps
 import pandas as pd
+import numpy as np
 import os
 
-print(get_models())
-pot_root, pots = get_potentials('eam/alloy', species=['Al'])
+print(lammps.get_models())
+pot_root, pots = lammps.get_potentials('eam/alloy', species=['Al'])
 
 pots = pd.DataFrame(pots).sort_values(by='elements', ignore_index='True')
 print(pots)
@@ -13,6 +13,19 @@ print(pots)
 pot = os.path.join(pot_root, pots['pot_file'][1])
 print(pot)
 
+from ase import Atoms
+struct = Atoms(
+    '4Al',
+    cell = 4.05*np.eye(3),
+    scaled_positions = [
+        [0, 0, 0],
+        [0.5, 0.5, 0],
+        [0.5, 0, 0.5],
+        [0, 0.5, 0.5],
+        ],
+)*[6, 6, 6]
+
+data_in = 'struct_in.data'
 lmp_in = f"""
 # LAMMPS input script for FCC Al 3x3x3 supercell NVT simulation
 
@@ -22,11 +35,14 @@ dimension 3
 boundary p p p
 atom_style atomic
 
-# Define the lattice
-lattice fcc 4.05
-region box block 0 6 0 6 0 6
-create_box 1 box
-create_atoms 1 box
+# # Define the lattice
+# lattice fcc 4.05
+# region box block 0 6 0 6 0 6
+# create_box 1 box
+# create_atoms 1 box
+# # OR
+# Read data from data file
+read_data {data_in} 
 
 # Set mass for aluminum
 mass 1 27.0
@@ -47,7 +63,14 @@ fix 1 all nvt temp 300.0 300.0 $(100.0*dt)
 thermo 100
 
 # Run simulation
-run 10000
-"""
+run 1000
 
-run_lammps(directory='lmp_test', lmp_in=lmp_in)
+thermo_style custom step temp pe etotal press vol
+run 1000
+"""
+with working_directory('lmp_test'):
+    lammps.write_lammps_data(data_in, struct)
+    lammps.run_lammps(lmp_in=lmp_in)
+    output = lammps.parse_logfile('log.lammps')
+for partial in output:
+    print(partial)

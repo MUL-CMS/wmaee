@@ -7,29 +7,10 @@ from ase.io import write
 import os
 from shutil import copyfileobj
 
-# import numpy as np
-
 if test_pmg():
     from pymatgen.core import Structure
     from pymatgen.io.ase import AseAtomsAdaptor
     from pymatgen.io.vasp import Potcar, PotcarSingle, Incar, Kpoints, Poscar
-
-# try:
-#     from pymatgen.core import Structure
-#     from pymatgen.io.ase import AseAtomsAdaptor
-#     from pymatgen.io.vasp import Potcar, PotcarSingle
-#     PymatgenType = Union[Structure, Atoms]
-#     PotcarType = Optional[Potcar]
-# except ImportError:
-#     # pymatgen is not installed
-#     PymatgenType = Any
-#     PotcarType = Any
-
-
-# from pymatgen.io.vasp.inputs import Potcar, PotcarSingle
-# from pymatgen.core.composition import Composition
-# from pymatgen.core.structure import Structure
-
 
 
 def automatic_kpoints(length: float, write: bool = False) -> None:
