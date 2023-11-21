@@ -16,3 +16,13 @@ applications:
       args: 
         NCPUS: 2
       script: "mpirun -np {{ NCPUS }} vasp_std"
+  lammps:
+    potentials:
+      root: /home/david/work/LAMMPS_potentials/NIST_potentials
+      eam/alloy: eam.alloy
+      eam/fs: eam.fs
+    runner:
+      args:
+        NCPUS: 2
+      script: "mpirun -np {{ NCPUS }} /home/david/Software/miniforge3/envs/wmaee/bin/lmp_mpi"
+

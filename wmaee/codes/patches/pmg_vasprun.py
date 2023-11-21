@@ -1,7 +1,7 @@
 # Patching pymatgen Vasprun class to read in also stresses from the MD run
 
-from wmaee.core.config import is_pmg_avail
-if is_pmg_avail():
+from wmaee.core.requirements import test_pmg
+if test_pmg():
 
     from pymatgen.io.vasp.outputs import *
     try:
