@@ -2,6 +2,7 @@ from typing import Optional, List, Tuple, Dict, Union
 from wmaee.core.config import Config
 import yaml
 from os.path import join
+import pandas as pd
 
 
 def get_models() -> List[str]:
@@ -18,7 +19,7 @@ def get_models() -> List[str]:
 
 
 
-def get_potentials(model: str, species: Optional[List[str]] = None) -> Tuple[str, List[Dict[str, Union[str, List[str]]]]]:
+def get_potentials(model: str, species: Optional[List[str]] = None, return_df: Optional[bool] = True) -> Tuple[str, List[Dict[str, Union[str, List[str]]]]]:
     """
     Get LAMMPS potentials for a given model and optionally filtered by species.
 
@@ -26,6 +27,8 @@ def get_potentials(model: str, species: Optional[List[str]] = None) -> Tuple[str
     - model (str): The name of the LAMMPS potential model.
     - species (Optional[List[str]]): A list of element symbols to filter the 
     potentials. If None, all potentials are returned.
+    - return_df (Optional[bool]): Whether to return potentials as pandas.DataFrame
+    or a simple dictionary. Default is True.
 
     Returns:
     Tuple[str, List[Dict[str, Union[str, List[str]]]]]: A tuple containing the 
@@ -51,4 +54,6 @@ def get_potentials(model: str, species: Optional[List[str]] = None) -> Tuple[str
     else:
         # no species specified -> return all potentials
         pots = potentials['potentials']
+    if return_df:
+        pots = pd.DataFrame(pots)
     return potentials['pot_root'], pots

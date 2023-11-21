@@ -48,4 +48,6 @@ def parse_logfile(logfile, return_df=True):
         if sum([line.startswith(string) for string in start_thermo_strings]) >= 1:
             keyword_flag = True
         i += 1
+    if len(partial_logs) == 1:
+        return partial_logs[0]
     return partial_logs

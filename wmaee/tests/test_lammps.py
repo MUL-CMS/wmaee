@@ -27,7 +27,7 @@ struct = Atoms(
 
 data_in = 'struct_in.data'
 lmp_in = f"""
-# LAMMPS input script for FCC Al 3x3x3 supercell NVT simulation
+# LAMMPS input script for FCC Al 3x3x3 supercell NPT simulation
 
 # Initialization
 units metal
@@ -55,9 +55,10 @@ pair_coeff * * {pot} Al
 timestep 0.002 # default for metal units: 0.001
 velocity all create 300.0 12345
 
-# Set thermostat for NVT ensemble with automated setting of damping 
+# Set thermostat for NPT ensemble with automated setting of damping 
 # parameter for the Nose-Hoover thermostat
-fix 1 all nvt temp 300.0 300.0 $(100.0*dt)
+# fix 1 all nvt temp 300.0 300.0 $(100.0*dt)
+fix 1 all npt temp 300 300 $(100.0*dt) iso 0.0 0.0 $(1000.0*dt)
 
 # Output values every 100 timesteps
 thermo 100
