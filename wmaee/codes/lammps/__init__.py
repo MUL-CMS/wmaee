@@ -67,4 +67,4 @@ def read_lammps_dump(dump_file: Union[str, IO], index: Any = slice(None), **kwar
     """
     return _read_lammps_dump(dump_file, index=index)
 
-__all__ = [get_models, get_potentials, run_lammps, parse_logfile, write_lammps_data, read_lammps_dump]
+__all__ = ['get_models', 'get_potentials', 'run_lammps', 'parse_logfile', 'write_lammps_data', 'read_lammps_dump']
