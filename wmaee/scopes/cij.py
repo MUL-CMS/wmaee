@@ -7,11 +7,11 @@ from typing import *
 from ase import Atoms
 from typing import Tuple
 from itertools import product
-from frozendict import frozendict as fdict
+# from frozendict import frozendict as fdict
 from numpy.typing import NDArray, ArrayLike
 
 
-VOIGT_INDEX_MAP: Mapping[int, Tuple[int, int]] = fdict({
+VOIGT_INDEX_MAP: Mapping[int, Tuple[int, int]] = dict({
         0: (0, 0),
         1: (1, 1),
         2: (2, 2),
