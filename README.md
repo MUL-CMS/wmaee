@@ -1,6 +1,8 @@
 # wmaee
 
-A new generation of `wmaee`, version 2.0...
+A new generation of `wmaee`, version 2.1
+
+Online documentation of functions and modules: [https://wmaee.readthedocs.io/en/latest/](https://wmaee.readthedocs.io/en/latest/)
 
 ## wmaee.conf.yaml
 - location
