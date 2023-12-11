@@ -1,0 +1,10 @@
+ase==3.22.1
+deprecation==2.1.0
+glob2==0.7
+lammps==2023.08.02
+nglview==3.0.8
+pandas==2.1.2
+pymatgen==2023.11.12
+pyyaml==6.0.1
+setuptools==68.1.2
+typing_extensions==4.8.0

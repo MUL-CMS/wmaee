@@ -11,9 +11,12 @@ build:
     python: "3.10"
 
 mkdocs:
-  configuration: mkdocs.yml
+  configuration: docs/mkdocs.yml
+
+submodules:
+  include: [wmaee.codes.vasp]
 
 # Optionally declare the Python requirements required to build your docs
-#python:
-#  install:
-#  - requirements: docs/requirements.txt
+python:
+ install:
+ - requirements: docs/requirements.txt
