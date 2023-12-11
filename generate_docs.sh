@@ -14,4 +14,4 @@ core/visualize.py
 utils/
 "
 
-pdoc $modules --docformat numpy  -o ./docs
+pdoc $modules --docformat numpy  -o ../docs
