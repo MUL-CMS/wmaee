@@ -11,7 +11,7 @@ build:
     python: "3.10"
 
 mkdocs:
-  configuration: wmaee/docs/mkdocs.yml
+  configuration: docs/mkdocs.yml
 
 submodules:
   include: [wmaee.codes.vasp]
