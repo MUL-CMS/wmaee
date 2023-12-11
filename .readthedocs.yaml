@@ -10,8 +10,8 @@ build:
   tools:
     python: "3.10"
 
-#mkdocs:
-  #configuration: docs/mkdocs.yml
+mkdocs:
+  configuration: docs/mkdocs.yml
 
 #submodules:
   #include: [wmaee.codes.vasp]
