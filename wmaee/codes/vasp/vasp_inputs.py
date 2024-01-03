@@ -1,7 +1,7 @@
 from wmaee.core.config import Config
 from wmaee.core.requirements import test_pmg
 from wmaee.core.io import working_directory
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Tuple
 from ase import Atoms
 from ase.io import write
 import os
@@ -13,7 +13,7 @@ if test_pmg():
     from pymatgen.io.vasp import Potcar, PotcarSingle, Incar, Kpoints, Poscar
 
 
-def automatic_kpoints(length: float, write: bool = False) -> None:
+def automatic_kpoints(length: float, write: Optional[bool] = False) -> None:
     """
     Writes a KPOINTS file for generating a regular Gamma-centered k-point mesh.
 
@@ -41,6 +41,51 @@ def automatic_kpoints(length: float, write: bool = False) -> None:
             output.write(kpts)
     else:
         return kpts
+
+
+def regular_kpoints(kpoints: Tuple[int, int, int] = (1, 1, 1),
+                    shift: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+                    Gamma: bool = True,
+                    write: bool = False) -> None:
+    """
+    Writes a KPOINTS file for generating a regular k-point mesh.
+
+    Parameters
+    ----------
+    kpoints : tuple of int, optional
+        Subdivisions N_1, N_2, and N_3 along the reciprocal lattice vectors.
+        Default is (1, 1, 1).
+    shift : tuple of float, optional
+        Shift of the mesh (s_1, s_2, s_3).
+        Default is (0.0, 0.0, 0.0).
+    Gamma : bool, optional
+        If True, generates a Gamma-centered mesh; if False, uses Monkhorst-Pack scheme.
+        Default is True.
+    write : bool, optional
+        If True, writes the KPOINTS file; if False, returns the KPOINTS content as a string.
+        Default is False.
+
+    Returns
+    -------
+    None or str
+        If write is True, writes the KPOINTS file and returns None.
+        If write is False, returns the KPOINTS content as a string.
+    """
+    kpts = 'Regular k-point mesh\n'
+    kpts += '0 # indicates automatic number of k-points\n'
+    if Gamma:
+        kpts += 'Gamma # generate a Gamma centered mesh\n'
+    else:
+        kpts += 'Monkhorst # Monkhorst-Pack scheme\n'
+    kpts += f'{kpoints[0]} {kpoints[1]} {kpoints[2]} # subdivisions N_1, N_2, and N_3 along the reciprocal lattice vectors\n'
+    kpts += f'{shift[0]} {shift[1]} {shift[2]} # shift of the mesh (s_1, s_2, s_3)'
+
+    if write:
+        with open('KPOINTS', 'w') as output:
+            output.write(kpts)
+    else:
+        return kpts
+
 
 
 def generate_potcar(struct: Union[Atoms, Any], 
