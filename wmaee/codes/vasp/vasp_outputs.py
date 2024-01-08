@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from typing import Optional, Dict, Any, Union
 
 from wmaee.core.data_structs import DotDict
@@ -121,12 +122,14 @@ def parse_output(directory: Optional[str] = None,
                 stress = []
                 for s in outcar:
                     energies.append(s.calc.get_potential_energy())
-                    forces.append(s.calc.get_forces())
-                    stress.append(s.calc.get_stress())
+                    forces.append(np.array(s.calc.get_forces()))
+                    stress.append(np.array(s.calc.get_stress()))
                 output_data['final_energy'] = energies[-1]
                 output_data['ionic_step_energies'] = energies
                 output_data['ionic_step_forces'] = forces
                 output_data['ionic_step_stress'] = stress
+                output_data['final_stress'] = output_data['ionic_step_stress'][-1]
+                output_data['final_forces'] = output_data['ionic_step_forces'][-1]
                 # output_data['final_energy'] = outcar.calc.get_potential_energy()
 
     # Parse vasprun.xml for electronic structure information and DOS if enabled
@@ -142,9 +145,9 @@ def parse_output(directory: Optional[str] = None,
             output_data['final_energy'] = vrun.final_energy # first try to read final energy
             output_data['ionic_step_energies'] = [s['e_0_energy'] for s in vrun.ionic_steps]
             if 'forces' in vrun.ionic_steps[0].keys():
-                output_data['ionic_step_forces'] = [s['forces'] for s in vrun.ionic_steps]
+                output_data['ionic_step_forces'] = [np.array(s['forces']) for s in vrun.ionic_steps]
             if 'stress' in vrun.ionic_steps[0].keys():
-                output_data['ionic_step_stress'] = [s['stress'] for s in vrun.ionic_steps]
+                output_data['ionic_step_stress'] = [np.array(s['stress']) for s in vrun.ionic_steps]
         else: # ase parser
             vrun = read_vasp_xml(filename, index=slice(None))
             energies = []
@@ -152,12 +155,14 @@ def parse_output(directory: Optional[str] = None,
             stress = []
             for s in vrun:
                 energies.append(s.calc.get_potential_energy())
-                forces.append(s.calc.get_forces())
-                stress.append(s.calc.get_stress())
+                forces.append(np.array(s.calc.get_forces()))
+                stress.append(np.array(s.calc.get_stress()))
             output_data['final_energy'] = energies[-1]
             output_data['ionic_step_energies'] = energies
             output_data['ionic_step_forces'] = forces
             output_data['ionic_step_stress'] = stress
+        output_data['final_stress'] = output_data['ionic_step_stress'][-1]
+        output_data['final_forces'] = output_data['ionic_step_forces'][-1]
             
     # Parse ionic relaxation steps from XDATCAR
     filename = os.path.join(directory, XDATCAR)

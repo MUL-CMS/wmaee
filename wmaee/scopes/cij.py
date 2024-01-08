@@ -6,19 +6,15 @@ import numpy as np
 from typing import *
 from ase import Atoms
 from typing import Tuple
+from typing import Union
 from itertools import product
 # from frozendict import frozendict as fdict
 from numpy.typing import NDArray, ArrayLike
 
+from numpy import ndarray
 
-VOIGT_INDEX_MAP: Mapping[int, Tuple[int, int]] = dict({
-        0: (0, 0),
-        1: (1, 1),
-        2: (2, 2),
-        3: (1, 2),
-        4: (0, 2),
-        5: (0, 1)
-})
+
+
 
 
 def get_ULICS(max_eps: float = 1.5e-2) -> NDArray:
@@ -41,40 +37,70 @@ def get_ULICS(max_eps: float = 1.5e-2) -> NDArray:
     return ULICS
 
 
-def apply_strain(atoms: Atoms, strain: ArrayLike, div_two: bool = True) -> Atoms:
-    """Applies strain to a structure
+def apply_strain(struct: Atoms, strain: ArrayLike, div_two: bool = True) -> Atoms:
+    """
+    Applies strain to a structure.
 
-    :param atoms: initial structure
-    :type atoms: ase.Atoms
-    :param strain: strain to be applied
-    :type strain: ArrayLike
-    :param div_two: whether apply factor of 2 when converting from
-        Voigt's notation to tensorial 3x3 strain. (default is True)
-    :type div_two: bool
-    :return: deformed structure
-    :rtype: ase.Atoms
+    Parameters
+    ----------
+    struct : ase.Atoms
+        Initial structure.
+    strain : ArrayLike
+        Strain to be applied.
+    div_two : bool, optional
+        Whether to apply a factor of 2 when converting from
+        Voigt's notation to tensorial 3x3 strain (default is True).
+
+    Returns
+    -------
+    ase.Atoms
+        Deformed structure.
     """
     strain = np.array(strain)
-    # try to convert the vector
+
+    # Try to convert the vector
     if strain.shape != (3, 3):
         strain = from_voigt(strain, div_two=div_two)
+
     deformation_matrix = np.eye(3) + strain
 
-    new_cell = np.dot(deformation_matrix, atoms.cell.array)
-    return Atoms(cell=new_cell, scaled_positions=atoms.get_scaled_positions(), numbers=atoms.numbers)
+    new_cell = np.dot(deformation_matrix, struct.cell.array)
+
+    return Atoms(cell=new_cell, 
+                 scaled_positions=struct.get_scaled_positions(), 
+                 numbers=struct.numbers)
 
 
-def index_from_voigt(i: int) -> Optional[Tuple[int, int]]:
+
+def index_from_voigt(n: int) -> Union[tuple, None]:
     """
-    Converts Voigt's (1 index) and tensorial (2 indices) notation
+    Convert Voigt's index to matrix indices.
 
-    :param i:  index in Voigt's notation (0..5)
-    :type i: int
-    :return: pair of indices (0..2)
-    :rtype: Optional[Tuple[int, int]]
+    Parameters
+    ----------
+    n : int
+        Voigt's index.
+
+    Returns
+    -------
+    Union[tuple, None]
+        Tuple representing matrix indices (a, b) if n is a valid Voigt's index, None otherwise.
     """
+    if n == 0:
+        return 0, 0
+    elif n == 1:
+        return 1, 1
+    elif n == 2:
+        return 2, 2
+    elif n == 3:
+        return 1, 2
+    elif n == 4:
+        return 0, 2
+    elif n == 5:
+        return 0, 1
+    else:
+        return None
 
-    return VOIGT_INDEX_MAP.get(i)
 
 
 def index_to_voigt(i: int, j: int) -> Optional[int]:
@@ -89,6 +115,7 @@ def index_to_voigt(i: int, j: int) -> Optional[int]:
     :rtype: int
     """
     return {v: k for k, v in VOIGT_INDEX_MAP.items()}.get((i, j))
+
 
 
 def transform_tensor(tensor: NDArray, arr: NDArray, fact_two: bool = False) -> NDArray:
@@ -120,17 +147,30 @@ def transform_tensor(tensor: NDArray, arr: NDArray, fact_two: bool = False) -> N
         raise ValueError('Unknown shape of the input tensor.')
 
 
-def from_voigt(m: NDArray, div_two: bool = True) -> NDArray:
-    """
-    Transform the strain stress array from Voigt's notation into a (3,3) matrix. In case it is a (6,6) matrix
-    the function will produce a forth rank tensor.
 
-    :param m: the stress or strain array
-    :type m: NDArray
-    :param div_two: divide off-diagonal elements by two (default is True)
-    :type div_two: bool
-    :return: a transformed tensor
-    :rtype: NDArray
+def from_voigt(m: ndarray, div_two: bool = True) -> ndarray:
+    """
+    Transform the stress or strain array from Voigt's notation into a (3,3) matrix.
+    
+    In case it is a (6,) array, the function will produce a second-rank tensor (3x3 matrix).
+    In case it is a (6,6) matrix, the function will produce a fourth-rank tensor (3x3x3x3 matrix).
+
+    Parameters
+    ----------
+    m : ndarray
+        The stress or strain array in Voigt's notation.
+    div_two : bool, optional
+        Divide off-diagonal elements by two (default is True).
+
+    Returns
+    -------
+    ndarray
+        A transformed tensor.
+
+    Raises
+    ------
+    ValueError
+        If the input data has an unknown shape.
     """
 
     if m.shape == (6,):
@@ -147,35 +187,47 @@ def from_voigt(m: NDArray, div_two: bool = True) -> NDArray:
         ])
         return m
     elif m.shape == (6, 6):
-        # 4nd rank tensor: matrix 6x6 -> matrix 3x3x3x3
+        # 4th rank tensor: matrix 6x6 -> matrix 3x3x3x3
         fact = np.ones(6)
         if div_two:
-           for i in np.arange(3, 6):
-               fact[i] = 0.5
-        e = np.zeros(81).reshape((3, 3, 3 ,3))
-        for i, j in product(np.arange(6), np.arange(6)):
+            fact[3:] = 0.5
+        e = np.zeros(81).reshape((3, 3, 3, 3))
+        for i, j in np.ndindex((6, 6)):
             a, b = index_from_voigt(i)
             c, d = index_from_voigt(j)
-            e[a, b, c, d] = m[i, j]*fact[i]*fact[j]
-            e[a, b, d, c] = m[i, j]*fact[i]*fact[j]
-            e[b, a, c, d] = m[i, j]*fact[i]*fact[j]
-            e[b, a, d, c] = m[i, j]*fact[i]*fact[j]
+            e[a, b, c, d] = m[i, j] * fact[i] * fact[j]
+            e[a, b, d, c] = m[i, j] * fact[i] * fact[j]
+            e[b, a, c, d] = m[i, j] * fact[i] * fact[j]
+            e[b, a, d, c] = m[i, j] * fact[i] * fact[j]
         return e
     else:
         raise ValueError('Unknown shape of the input data')
 
 
+
 def to_voigt(m: NDArray, times_two: bool = True) -> NDArray:
     """
-    Transform a strain stress array tensor into Voigt's notation (3,3) -> (6,). In case {m} is a forth rank tensor
-    a 2D matrix wil be produced. (3,3,3,3) -> (6,6).
+    Transform a stress or strain array tensor into Voigt's notation.
+    
+    For a second-rank tensor (3x3 matrix), it transforms into a Voigt's notation (6,).
+    For a fourth-rank tensor (3x3x3x3 matrix), it transforms into a Voigt's notation (6x6).
 
-    :param m: the stress or strain array
-    :type m: NDArray
-    :param times_two: multiply off-diagonal elements by two (default is True)
-    :type times_two: bool
-    :return: a transformed tensor
-    :rtype: NDArray
+    Parameters
+    ----------
+    m : NDArray
+        The stress or strain array tensor.
+    times_two : bool, optional
+        Multiply off-diagonal elements by two (default is True).
+
+    Returns
+    -------
+    NDArray
+        A transformed tensor.
+
+    Raises
+    ------
+    ValueError
+        If the input data has an unknown shape.
     """
     if m.shape == (3, 3):
         voigt = np.array([
@@ -191,17 +243,17 @@ def to_voigt(m: NDArray, times_two: bool = True) -> NDArray:
             voigt[4] *= 2.0
             voigt[5] *= 2.0
         return voigt
-    if m.shape == (3, 3, 3, 3):
+    elif m.shape == (3, 3, 3, 3):
         fact = np.ones(6)
         if times_two:
-           for i in range(3, 6):
-               fact[i] = 2.0
+            fact[3:] = 2.0
         voigt = np.zeros(36).reshape((6, 6))
         for i, j in product(range(6), range(6)):
-            # index_from_voigt returns an Optional type, therefore if a "None" would occur the function breaks at the unpacking step
+            # index_from_voigt returns an Optional type, therefore if a "None" would occur 
+            # the function breaks at the unpacking step
             a, b = index_from_voigt(i)
             c, d = index_from_voigt(j)
-            voigt[i, j] = m[a, b, c, d]*fact[i]*fact[j]
+            voigt[i, j] = m[a, b, c, d] * fact[i] * fact[j]
         return voigt
     else:
         raise ValueError('A stress matrix must be of shape (3,3)')
