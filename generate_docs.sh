@@ -12,6 +12,7 @@ core/data_structs.py
 core/utils.py
 core/visualize.py
 utils/
+scopes/eos.py
 "
 
 pdoc $modules --docformat numpy  -o ../docs
