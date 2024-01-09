@@ -17,23 +17,34 @@ from numpy import ndarray
 
 
 
-def get_ULICS(max_eps: float = 1.5e-2) -> NDArray:
+def get_ULICS(max_eps: float = 1.5e-2) -> ndarray:
     """
-    Returns ULICS (universal linear-independent cou-pling strains) used
+    Returns ULICS (universal linear-independent coupling strains) used
     for deformations in the stress-strain method.
-    For details see doi:10.1016/j.cpc.2009.11.017.
-    :param max_eps: (float) magnitide of the stress (largest component
-        in the Voigt's notation). Defaults to 1.5e-2.
-    :return: np.array 6x6 matrix of ULICS
+
+    For details, refer to doi:10.1016/j.cpc.2009.11.017.
+
+    Parameters
+    ----------
+    max_eps : float, optional
+        Magnitude of the stress (largest component in Voigt's notation).
+        Defaults to 1.5e-2.
+
+    Returns
+    -------
+    numpy.ndarray
+        6x6 matrix of ULICS.
     """
+    # Creating the 6x6 matrix of ULICS
     ULICS = max_eps / 6.0 * np.array([
         [1, -2, 3, -4, 5, -6],
         [2, 1, -5, -6, 4, 3],
         [3, 4, -1, 5, 6, -2],
-        [4, -3 ,6, 1, -2, 5],
+        [4, -3, 6, 1, -2, 5],
         [5, 6, 2, -3, -1, -4],
         [6, -5, -4, 2, -3, 1]
-        ])
+    ], dtype=np.float64)
+
     return ULICS
 
 
@@ -65,10 +76,10 @@ def apply_strain(struct: Atoms, strain: ArrayLike, div_two: bool = True) -> Atom
     deformation_matrix = np.eye(3) + strain
 
     new_cell = np.dot(deformation_matrix, struct.cell.array)
+    new_struct = struct.copy()
+    new_struct.set_cell(new_cell, scale_atoms=True)
 
-    return Atoms(cell=new_cell, 
-                 scaled_positions=struct.get_scaled_positions(), 
-                 numbers=struct.numbers)
+    return new_struct
 
 
 

@@ -351,7 +351,7 @@ def write_inputs(struct: Union[Atoms, Any],
     with working_directory(directory):
         # POSCAR
         if isinstance(struct, Atoms):
-            write(filename='POSCAR', images=struct, format='vasp')
+            write(filename='POSCAR', images=struct, format='vasp', direct=True)
         elif pmg and isinstance(struct, Poscar):
             struct.write_file(filename='POSCAR')
             struct = struct.structure # for POTCAR generation
