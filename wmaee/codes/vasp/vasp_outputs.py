@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Union
 
 from wmaee.core.data_structs import DotDict
 from wmaee.core.requirements import test_pmg
+from wmaee.scopes.cij import from_voigt
 
 if test_pmg():
     from pymatgen.io.vasp.outputs import Vasprun, Oszicar, Outcar, Xdatcar
@@ -123,7 +124,7 @@ def parse_output(directory: Optional[str] = None,
                 for s in outcar:
                     energies.append(s.calc.get_potential_energy())
                     forces.append(np.array(s.calc.get_forces()))
-                    stress.append(np.array(s.calc.get_stress()))
+                    stress.append(from_voigt(np.array(s.calc.get_stress()), div_two=False))
                 output_data['final_energy'] = energies[-1]
                 output_data['ionic_step_energies'] = energies
                 output_data['ionic_step_forces'] = forces
@@ -147,7 +148,7 @@ def parse_output(directory: Optional[str] = None,
             if 'forces' in vrun.ionic_steps[0].keys():
                 output_data['ionic_step_forces'] = [np.array(s['forces']) for s in vrun.ionic_steps]
             if 'stress' in vrun.ionic_steps[0].keys():
-                output_data['ionic_step_stress'] = [np.array(s['stress']) for s in vrun.ionic_steps]
+                output_data['ionic_step_stress'] = [-1*np.array(s['stress'])/10 for s in vrun.ionic_steps]
         else: # ase parser
             vrun = read_vasp_xml(filename, index=slice(None))
             energies = []
@@ -156,7 +157,7 @@ def parse_output(directory: Optional[str] = None,
             for s in vrun:
                 energies.append(s.calc.get_potential_energy())
                 forces.append(np.array(s.calc.get_forces()))
-                stress.append(np.array(s.calc.get_stress()))
+                stress.append(from_voigt(np.array(s.calc.get_stress()), div_two=False))
             output_data['final_energy'] = energies[-1]
             output_data['ionic_step_energies'] = energies
             output_data['ionic_step_forces'] = forces
