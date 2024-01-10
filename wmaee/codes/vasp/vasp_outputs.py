@@ -1,3 +1,6 @@
+### BUG IN ase.io.vasp, line 553! 
+_BUG_ASE_GPA = 160.2
+
 import os
 import numpy as np
 from typing import Optional, Dict, Any, Union
@@ -123,8 +126,8 @@ def parse_output(directory: Optional[str] = None,
                 stress = []
                 for s in outcar:
                     energies.append(s.calc.get_potential_energy())
-                    forces.append(np.array(s.calc.get_forces()))
-                    stress.append(from_voigt(np.array(s.calc.get_stress()), div_two=False))
+                    forces.append(np.array(s.calc.get_forces()))                    
+                    stress.append(from_voigt(_BUG_ASE_GPA*np.array(s.calc.get_stress()), div_two=False))
                 output_data['final_energy'] = energies[-1]
                 output_data['ionic_step_energies'] = energies
                 output_data['ionic_step_forces'] = forces
@@ -156,8 +159,8 @@ def parse_output(directory: Optional[str] = None,
             stress = []
             for s in vrun:
                 energies.append(s.calc.get_potential_energy())
-                forces.append(np.array(s.calc.get_forces()))
-                stress.append(from_voigt(np.array(s.calc.get_stress()), div_two=False))
+                forces.append(np.array(s.calc.get_forces()))                
+                stress.append(from_voigt(_BUG_ASE_GPA*np.array(s.calc.get_stress()), div_two=False))
             output_data['final_energy'] = energies[-1]
             output_data['ionic_step_energies'] = energies
             output_data['ionic_step_forces'] = forces
