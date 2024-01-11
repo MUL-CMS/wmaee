@@ -25,13 +25,15 @@ def parse_output(directory: Optional[str] = None,
                  OSZICAR: str = 'OSZICAR',
                  OUTCAR: str = 'OUTCAR',
                  vasprun: str = 'vasprun.xml',
-                 XDATCAR: str = 'XDATCAR',                 
+                 XDATCAR: str = 'XDATCAR',
+                 DOSCAR: str = 'DOSCAR',
                  ase_atoms: bool = False,
                  parse_oszicar: bool = False,
                  parse_outcar: bool = False,
                  parse_vasprun: bool = True,
                  parse_vasprun_dos: bool = False,
                  parse_xdatcar: bool = False,
+                 parse_doscar: bool = False,
                  return_DocDict: bool = True,
                 ) -> Union[DotDict, Dict[str, Any]]:
     """
@@ -143,7 +145,14 @@ def parse_output(directory: Optional[str] = None,
             if parse_vasprun_dos:
                 vrun = Vasprun(filename=filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False, parse_dos=True)
                 dos = vrun.complete_dos
-                output_data['total_dos'] = dos
+                energy = dict(
+                    Emin=min(dos.energies), Emax=max(dos.energies), EF=dos.efermi, 
+                    EN=len(dos.energies), Eg=dos.get_gap(), E=dos.energies
+                )
+                # @TODO add parsing PDOS from vasprun.xml                
+                output_data['dos'] = dict(energy=energy, TDOS=dos.get_densities(), PDOS=None)
+                if return_DocDict:
+                    output_data['dos'] = DotDict(output_data['dos'])
             else:
                 vrun = Vasprun(filename=filename, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False, parse_dos=False)
             output_data['final_energy'] = vrun.final_energy # first try to read final energy
@@ -180,7 +189,20 @@ def parse_output(directory: Optional[str] = None,
             structures = read_vasp_xdatcar(filename, index=slice(None))
         output_data['ionic_relaxation'] = structures
             
-
+    # Parse DOS from DOSCAR
+    filename = os.path.join(directory, DOSCAR)
+    if parse_doscar and os.path.isfile(filename):
+        from wmaee.scopes.dos import dos
+        from wmaee.core.io import working_directory
+        with working_directory(directory):
+            DOS = dos()
+            DOS.read_DOS_VASP(fDOSCAR=DOSCAR, fPOSCAR=POSCAR)
+            if return_DocDict:
+                output_data['dos'] = DotDict(dict(energy=DOS.energy, TDOS=DOS.TDOS, PDOS=DOS.PDOS))
+            else:
+                output_data['dos'] = dict(energy=DOS.energy, TDOS=DOS.TDOS, PDOS=DOS.PDOS)
+            
+        
     if return_DocDict:
         return DotDict(output_data)
     else:
