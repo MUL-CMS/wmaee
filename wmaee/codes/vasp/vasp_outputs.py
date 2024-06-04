@@ -3,6 +3,7 @@ _BUG_ASE_GPA = 160.2
 
 import os
 import numpy as np
+import pandas as pd
 from typing import Optional, Dict, Any, Union
 
 from wmaee.core.data_structs import DotDict
@@ -203,6 +204,55 @@ def parse_output(directory: Optional[str] = None,
                 output_data['dos'] = dict(energy=DOS.energy, TDOS=DOS.TDOS, PDOS=DOS.PDOS)
             
         
+    if return_DocDict:
+        return DotDict(output_data)
+    else:
+        return output_data
+
+    
+def parse_AIMD(directory: Optional[str] = None,
+               OSZICAR: str = 'OSZICAR',
+               parse_oszicar: bool = True,
+               return_DocDict: bool = True) -> Union[Dict[str, Any], DotDict]:
+    """
+    Parse AIMD (Ab Initio Molecular Dynamics) data from VASP output files.
+
+    Parameters
+    ----------
+    directory : Optional[str], default=None
+        The directory where the VASP output files are located. If not provided, the current working directory is used.
+    OSZICAR : str, default='OSZICAR'
+        The name of the OSZICAR file.
+    parse_oszicar : bool, default=False
+        Flag to indicate if the OSZICAR file should be parsed.
+    return_DocDict : bool, default=True
+        Flag to indicate if the output should be returned as a DotDict object.
+
+    Returns
+    -------
+    dict or DotDict
+        Parsed data from the OSZICAR file. The format of the returned data depends on the value of return_DocDict.
+
+    Notes
+    -----
+    This function utilizes pymatgen to parse the OSZICAR file if available. The ionic steps are stored in a DataFrame.
+    """
+    
+    pmg = test_pmg()  # Test if pymatgen is available
+    output_data = {}  # Dictionary to store the parsed data
+    
+    # Use the current working directory if directory is not provided
+    if directory is None:
+        directory = os.getcwd()
+    directory = os.path.expanduser(directory)  # Expand the user path if '~' is used
+    
+    # Parse energies from OSZICAR if available and pymatgen is available
+    oszicar_file = os.path.join(directory, OSZICAR)
+    if parse_oszicar and pmg and os.path.isfile(oszicar_file):
+        oszicar = Oszicar(oszicar_file)
+        output_data['ionic_steps'] = pd.DataFrame(oszicar.ionic_steps)
+    
+    # Return the parsed data as a DotDict or a regular dictionary
     if return_DocDict:
         return DotDict(output_data)
     else:
