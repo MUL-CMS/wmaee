@@ -12,6 +12,10 @@ core/data_structs.py
 core/utils.py
 core/visualize.py
 scopes/eos.py
+scopes/md.py
+scopes/dos.py
+scopes/structural_analysis.py 
+scopes/dos.py
 utils/
 "
 
