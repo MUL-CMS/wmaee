@@ -46,7 +46,7 @@ def ML_ABN_concat(files, output='ML_AB', overwrite=False):
                     l = src.readline()
     out.close()
 
-    # corrent the total number of structure
+    # correct the total number of structure
     with open(output+'.tmp', 'w') as out:
         with open(output, 'r') as src:
             i = 1
@@ -63,3 +63,49 @@ def ML_ABN_concat(files, output='ML_AB', overwrite=False):
     rename(output+'.tmp', output)
 
 
+def generate_ML_AB(input='OUTCAR', input_type='OUTCAR', output='ML_AB', overwrite=False, verbose=True):
+    # from pymatgen.io.vasp import Vasprun
+    from os.path import exists
+    from monty.re import regrep
+    from os import remove, rename
+    
+    # vrun = Vasprun(filename=vasprun, parse_dos=False, parse_eigen=False, parse_potcar_file=False, parse_projected_eigen=False)
+    
+    if not exists(input):
+        raise FileExistsError(f'Input file {input} doesn\'t exist in the current folder.')
+    if exists(output) and not overwrite:
+        raise FileExistsError(f'Output file {output} exists in the current folder and overwrite is not permitted.')
+    else:
+        out = open(output, 'w')
+        
+    if input_type=='OUTCAR':
+        sp = regrep(
+            input, 
+            patterns=dict(species='TITEL\s+=\s\w+\s(\w+)')
+            )
+        sp = [x[0][0] for x in sp['species']]
+    if verbose:
+        print('found species: ', sp)
+    if input_type=='OUTCAR':
+        num_sp = regrep(
+            input,
+            patterns=dict(num_species='ions per type\s+=\s+'+''.join(['(\d+)\s']*len(sp))),
+            terminate_on_match=True,
+            postprocess=lambda x: int(x)
+            )
+        num_sp = num_sp['num_species'][0][0]
+    if verbose:
+        print('num species: ', num_sp)
+    if input_type=='OUTCAR':        
+        num_sp = regrep(
+            input,
+            patterns=dict(masses='POMASS\s+=\s+'+''.join(['(\d+.\d+)\s']*len(sp))),
+            terminate_on_match=True,
+            postprocess=lambda x: float(x)
+            )
+        
+    if verbose:
+        print('num species: ', num_sp)
+        
+    
+    
