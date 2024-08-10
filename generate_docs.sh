@@ -6,6 +6,8 @@ modules="
 codes/vasp
 codes/vasp/vasp_ml.py
 codes/lammps
+codes/pyiron/pyiron_cluster.py
+codes/pyiron/pyiron_NEB_task.py
 core/io.py
 core/config.py
 core/data_structs.py
