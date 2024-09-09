@@ -1,0 +1,28 @@
+applications:
+  gpaw:
+    potential_path: /home/dominik/.local/software/gpaw/potentials
+  abinit:
+    potential_path: /home/dominik/.local/software/abinit/potentials
+    launch:
+      args: ["NCPUS", "PREFIX"]
+      script: "mpirun -np {{ NCPUS }} abinit {{ PREFIX }}.in | tee {{ PREFIX }}.log"
+  vasp:
+    potential_path: /home/david/work/VASP_potentials
+    potentials:
+      default: GGA-PBE
+      GGA-PBE: GGA-PBE/PAW_6.4
+      LDA: LDA/PAW_6.4
+    runner:
+      args: 
+        NCPUS: 2
+      script: "mpirun -np {{ NCPUS }} vasp_std"
+  lammps:
+    potentials:
+      root: /home/david/work/LAMMPS_potentials/NIST_potentials
+      eam/alloy: eam.alloy
+      eam/fs: eam.fs
+    runner:
+      args:
+        NCPUS: 2
+      script: "mpirun -np {{ NCPUS }} /home/david/Software/miniforge3/envs/wmaee/bin/lmp_mpi"
+
