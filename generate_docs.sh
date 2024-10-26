@@ -13,6 +13,7 @@ core/config.py
 core/data_structs.py
 core/utils.py
 core/visualize.py
+scopes/cij.py
 scopes/eos.py
 scopes/md.py
 scopes/dos.py
