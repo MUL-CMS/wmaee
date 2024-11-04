@@ -3,18 +3,32 @@ Collection of helper functions for handling ML functionality of VASP.
 """
 
 from typing import Callable
+from typing import List, Union
 
-def ML_ABN_concat(files, output='ML_AB', overwrite=False):
-    """Concatenates a list of `ML_AB` or `ML_ABN` files. Currently assumes that all files contain same chemistry!
-    @TODO: check if the above is the case, and allow for merging various chemistries.
+def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = False, verbose: bool = True) -> None:
+    """
+    Concatenates a list of `ML_AB` or `ML_ABN` files. This function merges headers and structures
+    from multiple files into a single output file.
 
-    Args:
-        files (_type_): _description_
-        output (str, optional): _description_. Defaults to 'ML_AB'.
-        overwrite (bool, optional): _description_. Defaults to False.
+    Parameters
+    ----------
+    files : List[str]
+        List of paths to input files that should be concatenated.
+    output : str, optional
+        Path for the output file, by default 'ML_AB'.
+    overwrite : bool, optional
+        Whether to overwrite the output file if it already exists, by default False.
+    verbose : bool, optional
+        If True, prints details of the merging process, by default True.
 
-    Raises:
-        FileExistsError: _description_
+    Raises
+    ------
+    FileExistsError
+        If the output file exists and overwrite is set to False.
+
+    Notes
+    -----
+    This function currently assumes that all input files contain the same chemistry.
     """
     
     from os.path import exists
@@ -23,46 +37,120 @@ def ML_ABN_concat(files, output='ML_AB', overwrite=False):
     if exists(output) and not overwrite:
         raise FileExistsError(f'Output file {output} exists in the current folder and overwrite is not permitted.')
     else:
-        out = open(output, 'w')
+        out = open(output+'.tmp_wmaee_tmp', 'w')
 
     s = 0
+    sp = list()
+    max_types = 0
+    max_atoms = 0
+    max_species = 0
+    masses = dict()
     for i, f in enumerate(files):
-        # print(f'reading structures from {f}')
+        if verbose:
+            print(f'reading structures from {f}')
         with open(f, 'r') as src:
-            # deal with header: first file copy header, other files ignore
+            # deal with header: collect merged information
             l = src.readline();
-            while l.strip().split()[0] != 'Configuration':
-                if i == 0:
-                    out.writelines(l)
-                l = src.readline()
-            # done with headers, now go configuration by configuration
-            if i > 0:
-                out.writelines("**************************************************\n")
+            print(l.strip())
+            while l.strip().split()[0] != 'Configuration':                
+                if 'The atom types' in l.strip():
+                    l = src.readline();
+                    l = src.readline();
+                    sp += l.strip().split()
+                    if verbose:
+                        print(f'  found species: {sp}')
+                if 'number of atom type' in l.strip():
+                    l = src.readline();
+                    l = src.readline();
+                    max_at = int(l.strip())
+                    if verbose:
+                        print(f'  maximum number of atom typess: {max_at}')
+                    max_types = max(max_types, max_at)                        
+                if 'atoms per system' in l.strip():
+                    l = src.readline();
+                    l = src.readline();
+                    max_at = int(l.strip())
+                    if verbose:
+                        print(f'  maximum number of atoms: {max_at}')
+                    max_atoms = max(max_atoms, max_at)
+                if 'atoms per atom type' in l.strip():
+                    l = src.readline();
+                    l = src.readline();
+                    max_at = int(l.strip())
+                    if verbose:
+                        print(f'  maximum number of atoms per type: {max_at}')
+                    max_species = max(max_species, max_at)
+                if 'Atomic mass' in l.strip():
+                    l = src.readline();
+                    m = ''
+                    l = src.readline();
+                    while '*********************' not in l.strip():
+                        m += l
+                        l = src.readline();
+                    for X, M in zip(sp, m.strip().split()):
+                        masses[X] = float(M)
+                        if verbose:
+                            print(f'  mass of {X}: {float(M)} a.u.')              
+                l = src.readline();
+            # done with headers, now go configuration by configuration            
+            out.writelines("**************************************************\n")
             while l:
                 s += 1
                 out.writelines(f"     Configuration num.{s:7d}\n")
-                print(f"     Configuration num.{s:7d}")
+                if verbose:
+                    print(f"     Configuration num.{s:7d}")
                 l = src.readline()
                 while l and l.strip().split()[0] != 'Configuration':
                     out.writelines(l)
                     l = src.readline()
     out.close()
+    
+    sp = list(set(sp))
 
-    # correct the total number of structure
-    with open(output+'.tmp', 'w') as out:
-        with open(output, 'r') as src:
-            i = 1
+    # write header    
+    with open(output, 'w') as out:        
+        _SEP_star  = "**************************************************\n"
+        _SEP_minus = "--------------------------------------------------\n"
+        _SEP_equal = "==================================================\n"
+        out.writelines(' 1.0 Version\n'+_SEP_star)
+        out.writelines('     The number of configurations\n'+_SEP_minus+f'{s:11d}\n'+_SEP_star)
+        out.writelines('     The maximum number of atom type\n'+_SEP_minus+f'{max_types:8d}\n'+_SEP_star)
+        out.writelines('     The atom types in the data file\n'+_SEP_minus+'     ')
+        for i, el in enumerate(sp):
+            out.writelines(el.ljust(3))
+            if i%3 == 2:
+                out.writelines('\n     ')
+        out.writelines('\n'+_SEP_star)
+        out.writelines('     The maximum number of atoms per system\n'+_SEP_minus+f'{max_atoms:8d}\n'+_SEP_star)
+        out.writelines('     The maximum number of atoms per atom type\n'+_SEP_minus+f'{max_species:8d}\n'+_SEP_star)
+        out.writelines('     Reference atomic energy (eV)\n'+_SEP_minus)
+        for i, _ in enumerate(sp):
+            out.writelines('   '+f'{0:18.16f}'+'     ') # dummy energy
+            if i%3 == 2:
+                out.writelines('\n')
+        out.writelines('\n'+_SEP_star)
+        out.writelines('     Atomic mass\n'+_SEP_minus)        
+        for i, X in enumerate(sp):
+            out.writelines('   '+f'{masses[X]:18.16f}'+'     ')
+            if i%3 == 2:
+                out.writelines('\n')
+        out.writelines('\n'+_SEP_star)
+        out.writelines('     The numbers of basis sets per atom type\n'+_SEP_minus+'    ')
+        for i, _ in enumerate(sp):
+            out.writelines('     1')
+            if i%3 == 2:
+                out.writelines('\n')
+        out.writelines('\n')
+        for i, el in enumerate(sp):
+            out.writelines(_SEP_star+f'     Basis set for {el}\n'+_SEP_minus+'          1      1\n')
+        
+        with open(output+'.tmp_wmaee_tmp', 'r') as src:
             l = src.readline()
             while l:
-                if i == 5:
-                    out.writelines(f"{s:11d}\n")
-                    print(f"{s:11d}")
-                else:
-                    out.writelines(l)
+                out.writelines(l)
                 l = src.readline()
-                i += 1
-    remove(output)
-    rename(output+'.tmp', output)
+              
+    remove(output+'.tmp_wmaee_tmp')
     
     
     
@@ -205,6 +293,7 @@ def generate_ML_AB(input: str = 'OUTCAR', input_type: str = 'OUTCAR', output: st
             terminate_on_match=True,
             postprocess=lambda x: int(x)
             )
+        # print('ions per type\s+=\s+'+''.join(['(\d+)\s*']*len(sp)))
         num_sp = num_sp['num_species'][0][0]
     if verbose:
         print('num species: ', num_sp)
