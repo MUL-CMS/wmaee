@@ -201,7 +201,7 @@ def generate_ML_AB(input: str = 'OUTCAR', input_type: str = 'OUTCAR', output: st
     if input_type=='OUTCAR':
         num_sp = regrep(
             input,
-            patterns=dict(num_species='ions per type\s+=\s+'+''.join(['(\d+)\s']*len(sp))),
+            patterns=dict(num_species='ions per type\s+=\s+'+''.join(['(\d+)\s*']*len(sp))),
             terminate_on_match=True,
             postprocess=lambda x: int(x)
             )
@@ -211,7 +211,7 @@ def generate_ML_AB(input: str = 'OUTCAR', input_type: str = 'OUTCAR', output: st
     if input_type=='OUTCAR':
         masses = regrep(
             input,
-            patterns=dict(masses='POMASS\s+=\s+'+''.join(['(\d+.\d+)\s']*len(sp))),
+            patterns=dict(masses='POMASS\s+=\s+'+''.join(['(\d+.\d+)\s*']*len(sp))),
             terminate_on_match=True,
             postprocess=lambda x: float(x)
             )
