@@ -51,7 +51,6 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
         with open(f, 'r') as src:
             # deal with header: collect merged information
             l = src.readline();
-            print(l.strip())
             while l.strip().split()[0] != 'Configuration':                
                 if 'The atom types' in l.strip():
                     l = src.readline();
