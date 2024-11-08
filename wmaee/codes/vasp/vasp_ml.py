@@ -115,7 +115,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
         _SEP_equal = "==================================================\n"
         out.writelines(' 1.0 Version\n'+_SEP_star)
         out.writelines('     The number of configurations\n'+_SEP_minus+f'{s:11d}\n'+_SEP_star)
-        out.writelines('     The maximum number of atom type\n'+_SEP_minus+f'{max_types:8d}\n'+_SEP_star)
+        out.writelines('     The maximum number of atom type\n'+_SEP_minus+f'{len(sp):8d}\n'+_SEP_star)
         out.writelines('     The atom types in the data file\n'+_SEP_minus+'     ')
         for i, el in enumerate(sp):
             out.writelines(el.ljust(3))
