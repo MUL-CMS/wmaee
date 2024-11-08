@@ -119,7 +119,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
         out.writelines('     The atom types in the data file\n'+_SEP_minus+'     ')
         for i, el in enumerate(sp):
             out.writelines(el.ljust(3))
-            if i%3 == 2:
+            if (i%3 == 2) and i<len(sp)-1:
                 out.writelines('\n     ')
         out.writelines('\n'+_SEP_star)
         out.writelines('     The maximum number of atoms per system\n'+_SEP_minus+f'{max_atoms:8d}\n'+_SEP_star)
@@ -127,19 +127,19 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
         out.writelines('     Reference atomic energy (eV)\n'+_SEP_minus)
         for i, _ in enumerate(sp):
             out.writelines('   '+f'{0:18.16f}'+'     ') # dummy energy
-            if i%3 == 2:
+            if (i%3 == 2) and i<len(sp)-1:
                 out.writelines('\n')
         out.writelines('\n'+_SEP_star)
         out.writelines('     Atomic mass\n'+_SEP_minus)        
         for i, X in enumerate(sp):
             out.writelines('   '+f'{masses[X]:18.16f}'+'     ')
-            if i%3 == 2:
+            if (i%3 == 2) and i<len(sp)-1:
                 out.writelines('\n')
         out.writelines('\n'+_SEP_star)
         out.writelines('     The numbers of basis sets per atom type\n'+_SEP_minus+'    ')
         for i, _ in enumerate(sp):
             out.writelines('     1')
-            if i%3 == 2:
+            if (i%3 == 2) and i<len(sp)-1:
                 out.writelines('\n')
         out.writelines('\n')
         for i, el in enumerate(sp):
@@ -412,7 +412,7 @@ def generate_ML_AB(input: str = 'OUTCAR', input_type: str = 'OUTCAR', output: st
     out.writelines('     The atom types in the data file\n'+_SEP_minus+'     ')
     for i, el in enumerate(sp):
         out.writelines(el.ljust(3))
-        if i%3 == 2:
+        if (i%3 == 2) and i<len(sp)-1:
             out.writelines('\n     ')
     out.writelines('\n'+_SEP_star)
     out.writelines('     The maximum number of atoms per system\n'+_SEP_minus+f'{sum(num_sp):8d}\n'+_SEP_star)
@@ -420,19 +420,19 @@ def generate_ML_AB(input: str = 'OUTCAR', input_type: str = 'OUTCAR', output: st
     out.writelines('     Reference atomic energy (eV)\n'+_SEP_minus)
     for i, _ in enumerate(sp):
         out.writelines('   '+f'{0:18.16f}'+'     ') # dummy energy
-        if i%3 == 2:
+        if (i%3 == 2) and i<len(sp)-1:
             out.writelines('\n')
     out.writelines('\n'+_SEP_star)
     out.writelines('     Atomic mass\n'+_SEP_minus)
     for i, m in enumerate(masses):
         out.writelines('   '+f'{m:18.16f}'+'     ')
-        if i%3 == 2:
+        if (i%3 == 2) and i<len(sp)-1:
             out.writelines('\n')
     out.writelines('\n'+_SEP_star)
     out.writelines('     The numbers of basis sets per atom type\n'+_SEP_minus+'    ')
     for i, _ in enumerate(sp):
         out.writelines('     1')
-        if i%3 == 2:
+        if (i%3 == 2) and i<len(sp)-1:
             out.writelines('\n')
     out.writelines('\n')
     for i, el in enumerate(sp):
