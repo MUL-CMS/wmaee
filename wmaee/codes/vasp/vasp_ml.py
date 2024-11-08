@@ -56,6 +56,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
                     l = src.readline();
                     l = src.readline();
                     sp += l.strip().split()
+                    sp = list(dict(sp))
                     if verbose:
                         print(f'  found species: {sp}')
                 if 'number of atom type' in l.strip():
@@ -63,7 +64,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
                     l = src.readline();
                     max_at = int(l.strip())
                     if verbose:
-                        print(f'  maximum number of atom typess: {max_at}')
+                        print(f'  maximum number of atom types: {max_at}')
                     max_types = max(max_types, max_at)                        
                 if 'atoms per system' in l.strip():
                     l = src.readline();
