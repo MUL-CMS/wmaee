@@ -55,7 +55,8 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
                 if 'The atom types' in l.strip():
                     l = src.readline();
                     l = src.readline();
-                    sp += l.strip().split()
+                    this_sp = l.strip().split()
+                    sp += this_sp
                     sp = list(set(sp))
                     if verbose:
                         print(f'  found species: {sp}')
@@ -87,7 +88,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
                     while '*********************' not in l.strip():
                         m += l
                         l = src.readline();
-                    for X, M in zip(sp, m.strip().split()):
+                    for X, M in zip(this_sp, m.strip().split()):
                         masses[X] = float(M)
                         if verbose:
                             print(f'  mass of {X}: {float(M)} a.u.')              
