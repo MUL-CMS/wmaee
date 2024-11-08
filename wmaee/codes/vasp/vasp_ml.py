@@ -56,7 +56,7 @@ def ML_ABN_concat(files: List[str], output: str = 'ML_AB', overwrite: bool = Fal
                     l = src.readline();
                     l = src.readline();
                     sp += l.strip().split()
-                    sp = list(dict(sp))
+                    sp = list(set(sp))
                     if verbose:
                         print(f'  found species: {sp}')
                 if 'number of atom type' in l.strip():
