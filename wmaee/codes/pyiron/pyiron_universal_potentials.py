@@ -1,5 +1,7 @@
 
 from pymatgen.io.ase import AseAtomsAdaptor
+from pyiron_base import PythonTemplateJob
+
 
 class M3gnet(PythonTemplateJob):
     """
@@ -15,7 +17,7 @@ class M3gnet(PythonTemplateJob):
     Nat Comput Sci 2, 718–728 (2022). 
     https://doi.org/10.1038/s43588-022-00349-3
     """
-    
+
     def __init__(self, project, job_name):
         super().__init__(project, job_name)
         # Set default input parameters
@@ -23,17 +25,17 @@ class M3gnet(PythonTemplateJob):
         self.input.relax_cell = True  # Whether to relax the cell or only atomic positions
         self.input.fmax = 0.01  # Force tolerance for relaxation
         self.input.verbose = True  # Verbosity flag
-        
+
         # we want to store the final structure for plotting reasons
         self.final_structure = None  # Initialize final_structure as an instance variable
 
     def format_numpy_array(self, numpy_list):
         """
         Converts a list of NumPy arrays to a multidimensional list.
-        
+
         Parameters:
         - numpy_list (list of numpy.ndarray): List of NumPy arrays.
-        
+
         Returns:
         - formatted_list (list of list of list): Multidimensional list.
         """
@@ -41,7 +43,6 @@ class M3gnet(PythonTemplateJob):
         formatted_list = numpy_array.tolist()
         return formatted_list
 
-    
     def relax_structure_m3gnet(self):
         """
         Function to relax a given structure using a pre-trained MD potential.
@@ -50,7 +51,7 @@ class M3gnet(PythonTemplateJob):
         - final_structure (Structure): The relaxed structure.
         - relaxed_lattice_parameter (List): The relaxed lattice parameter.
         - energy_tot (List: flaot): The total energy for each step.
-        
+
         """
         # Extract inputs
         structure = self.input.structure
@@ -62,7 +63,8 @@ class M3gnet(PythonTemplateJob):
         relaxer = Relaxer(relax_cell=relax_cell)
 
         # Perform relaxation
-        relax_results = relaxer.relax(pyiron_to_ase(structure), fmax=fmax, verbose=verbose)
+        relax_results = relaxer.relax(pyiron_to_ase(
+            structure), fmax=fmax, verbose=verbose)
 
         # Extract the final relaxed structure
         final_structure = relax_results['final_structure']
@@ -71,32 +73,34 @@ class M3gnet(PythonTemplateJob):
 
         # Store the final structure as an instance variable
         self.final_structure = final_structure_pyiron
-        
+
         # Calculate the relaxed lattice parameter
         relaxed_lattice_parameter = final_structure.lattice.abc
 
         # Get the full energy trajectory (list of energies)
-        energy_trajectory = relax_results['trajectory'].energies[:]  # Full list of energies
+        # Full list of energies
+        energy_trajectory = relax_results['trajectory'].energies[:]
 
         # Get the full trajectory of the cell dimensions
         cells_trajectory = relax_results['trajectory'].cells
         formated_cells = self.format_numpy_array(cells_trajectory)
-        
+
         # Get the full trajectory of the atomic positions
         positions_trajectory = relax_results['trajectory'].atom_positions
-        formated_positions = self.format_numpy_array(positions_trajectory)        
-        
+        formated_positions = self.format_numpy_array(positions_trajectory)
+
         # Get the full trajectory of the atomic positions
         force_trajectory = relax_results['trajectory'].forces
         formated_forces = self.format_numpy_array(force_trajectory)
-        
+
         # Get the full trajectory of the stresses
         stress_trajectory = relax_results['trajectory'].stresses
         formated_stresses = self.format_numpy_array(stress_trajectory)
-        
+
         # Print results
         if verbose:
-            print(f"Relaxed lattice parameter is {relaxed_lattice_parameter} Å")
+            print(
+                f"Relaxed lattice parameter is {relaxed_lattice_parameter} Å")
             print(f"Final energy is {energy_trajectory[-1]:.4f} eV")
 
         # Return results
@@ -112,7 +116,7 @@ class M3gnet(PythonTemplateJob):
 
         # Run the relaxation using the relax_structure_m3gnet method
         relaxed_lattice_parameter, energy_trajectory, formated_positions, formated_cells, formated_forces, formated_stresses = self.relax_structure_m3gnet()
-        
+
         # Store results in the output object
         self.output.cells = formated_cells
         self.output.positions = formated_positions
@@ -120,15 +124,13 @@ class M3gnet(PythonTemplateJob):
         self.output.energy_tot = energy_trajectory
         self.output.forces = formated_forces
         self.output.stresses = formated_stresses
-        
-        
+
         # Mark the job as finished
         self.status.finished = True
 
         # Save the job to HDF5 file (persistent storage)
         self.to_hdf()
-    
-    
+
     def get_structure(self):
         """
         Retrieves the final relaxed structure after the job has been run.
@@ -137,9 +139,10 @@ class M3gnet(PythonTemplateJob):
         - final_structure (Structure): The relaxed structure.
         """
         if self.final_structure is None:
-            raise ValueError("The job has not been run or the structure is not available.")
+            raise ValueError(
+                "The job has not been run or the structure is not available.")
         return self.final_structure
-    
+
 
 class Chgnet(PythonTemplateJob):
     """
@@ -157,7 +160,7 @@ class Chgnet(PythonTemplateJob):
     Nature Machine Intelligence, 1–11 (2023). 
     https://doi.org/10.1038/s42256-023-00716-3
     """
-    
+
     def __init__(self, project, job_name):
         super().__init__(project, job_name)
         # Set default input parameters
@@ -165,19 +168,20 @@ class Chgnet(PythonTemplateJob):
         self.input.relax_cell = True  # Whether to relax the cell or only atomic positions
         self.input.fmax = 0.01  # Force tolerance for relaxation
         self.input.verbose = True  # Verbosity flag
-        self.input.device = None # "cpu", "cuda", or "mps", None selects automatically available option
+        # "cpu", "cuda", or "mps", None selects automatically available option
+        self.input.device = None
         self.input.steps = 500
-        
+
         # we want to store the final structure for plotting reasons
         self.final_structure = None  # Initialize final_structure as an instance variable
 
     def format_numpy_array(self, numpy_list):
         """
         Converts a list of NumPy arrays to a multidimensional list.
-        
+
         Parameters:
         - numpy_list (list of numpy.ndarray): List of NumPy arrays.
-        
+
         Returns:
         - formatted_list (list of list of list): Multidimensional list.
         """
@@ -185,7 +189,6 @@ class Chgnet(PythonTemplateJob):
         formatted_list = numpy_array.tolist()
         return formatted_list
 
-    
     def relax_structure_chgnet(self):
         """
         Function to relax a given structure using a pre-trained MD potential.
@@ -194,7 +197,7 @@ class Chgnet(PythonTemplateJob):
         - final_structure (Structure): The relaxed structure.
         - relaxed_lattice_parameter (List): The relaxed lattice parameter.
         - energy_tot (List: flaot): The total energy for each step.
-        
+
         """
         # Extract inputs
         device = self.input.device
@@ -203,13 +206,15 @@ class Chgnet(PythonTemplateJob):
         fmax = self.input.fmax
         verbose = self.input.verbose
         steps = self.input.steps
-        
+
         # Initialize the relaxer with or without cell relaxation
         relaxer = StructOptimizer(use_device=device)
 
         # Perform relaxation
-        pymatgen_structure = AseAtomsAdaptor.get_structure(pyiron_to_ase(structure))
-        relax_results = relaxer.relax(atoms=pymatgen_structure, verbose=verbose, fmax=fmax, steps=steps, relax_cell=relax_cell)
+        pymatgen_structure = AseAtomsAdaptor.get_structure(
+            pyiron_to_ase(structure))
+        relax_results = relaxer.relax(
+            atoms=pymatgen_structure, verbose=verbose, fmax=fmax, steps=steps, relax_cell=relax_cell)
 
         # Extract the final relaxed structure
         final_structure = relax_results['final_structure']
@@ -218,36 +223,38 @@ class Chgnet(PythonTemplateJob):
 
         # Store the final structure as an instance variable
         self.final_structure = final_structure_pyiron
-        
+
         # Calculate the relaxed lattice parameter
         relaxed_lattice_parameter = final_structure.lattice.abc
 
         # Get the full energy trajectory (list of energies)
-        energy_trajectory = relax_results['trajectory'].energies[:]  # Full list of energies
+        # Full list of energies
+        energy_trajectory = relax_results['trajectory'].energies[:]
 
         # Get the full trajectory of the cell dimensions
         cells_trajectory = relax_results['trajectory'].cells
         formated_cells = self.format_numpy_array(cells_trajectory)
-        
+
         # Get the full trajectory of the atomic positions
         positions_trajectory = relax_results['trajectory'].atom_positions
-        formated_positions = self.format_numpy_array(positions_trajectory)        
-        
+        formated_positions = self.format_numpy_array(positions_trajectory)
+
         # Get the full trajectory of the atomic positions
         force_trajectory = relax_results['trajectory'].forces
         formated_forces = self.format_numpy_array(force_trajectory)
-        
+
         # Get the full trajectory of the stresses
         stress_trajectory = relax_results['trajectory'].stresses
         formated_stresses = self.format_numpy_array(stress_trajectory)
-        
+
         # Get the full trajectory of the magmoms
         magmom_trajectory = relax_results['trajectory'].magmoms
         formated_magmoms = self.format_numpy_array(magmom_trajectory)
-        
+
         # Print results
         if verbose:
-            print(f"Relaxed lattice parameter is {relaxed_lattice_parameter} Å")
+            print(
+                f"Relaxed lattice parameter is {relaxed_lattice_parameter} Å")
             print(f"Final energy is {energy_trajectory[-1]:.4f} eV")
 
         # Return results
@@ -263,7 +270,7 @@ class Chgnet(PythonTemplateJob):
 
         # Run the relaxation using the relax_structure_m3gnet method
         relaxed_lattice_parameter, energy_trajectory, formated_positions, formated_cells, formated_forces, formated_stresses, formated_magmoms = self.relax_structure_chgnet()
-        
+
         # Store results in the output object
         self.output.cells = formated_cells
         self.output.positions = formated_positions
@@ -272,14 +279,13 @@ class Chgnet(PythonTemplateJob):
         self.output.forces = formated_forces
         self.output.stresses = formated_stresses
         self.output.magmoms = formated_magmoms
-        
+
         # Mark the job as finished
         self.status.finished = True
 
         # Save the job to HDF5 file (persistent storage)
         self.to_hdf()
-    
-    
+
     def get_structure(self):
         """
         Retrieves the final relaxed structure after the job has been run.
@@ -288,5 +294,6 @@ class Chgnet(PythonTemplateJob):
         - final_structure (Structure): The relaxed structure.
         """
         if self.final_structure is None:
-            raise ValueError("The job has not been run or the structure is not available.")
+            raise ValueError(
+                "The job has not been run or the structure is not available.")
         return self.final_structure
