@@ -15,5 +15,5 @@ from wmaee.codes.pyiron.pyiron_CHGNet_job import CHGNet
 
 __all__ = ['CHGNet']
 
-__version__ = '2.2'
+__version__ = '2.1'
 #from _version import __version__
