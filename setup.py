@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='wmaee',
-    version='2.1',
+    version='2.2',
     description='A collection of evaluation scripts for MUL-CMS group',
     author_email='david.holec@unileoben.ac.at',
     license='MIT',
