@@ -2,8 +2,8 @@
 __author__ = "David Holec, Amin Sakic"
 __maintainer__ = "David Holec"
 __email__ = "david.holec@unileoben.ac.at"
-__date__ = "2024-12-11"
-__version__ = "0.1"
+__date__ = "2024-12-19"
+__version__ = "0.11"
 __license__ = "MIT"
 
 from pyiron_atomistics.atomistics.job.atomistic import AtomisticGenericJob
@@ -49,6 +49,8 @@ class CHGNet(AtomisticGenericJob):
         super(CHGNet, self).__init__(project, job_name)
         self.structure = None
         self.input = CalcParams()
+        if self.project_hdf5.file_exists:
+            self.input.from_hdf(self.project_hdf5, group_name='input')
         self._executable_activate(codename='chgnet')            
 
     @property
@@ -187,6 +189,18 @@ class CHGNet(AtomisticGenericJob):
                 else:
                     params.append(f'{p}={self.input.get(p)}')
         params = ','.join(params)
+        fix_imports = ''
+        fixes = []
+        if 'fix_imports' in self.input.keys():
+            fix_imports = self.input.get('fix_imports')
+        if 'fixes' in self.input.keys():
+            f = self.input.get('fixes')
+            if isinstance(f, str):                
+                fixes = [self.input.get('fixes')]
+            elif isinstance(f, list):
+                fixes = f
+            else:
+                self.logger.warning('Fixes are neither string or array of strings. Ignoring')         
         script = [
             'from chgnet.model import CHGNet, StructOptimizer',
             'from ase.io import read',
@@ -194,7 +208,11 @@ class CHGNet(AtomisticGenericJob):
             'from ase.io.trajectory import Trajectory',
             'from pymatgen.io.ase import AseAtomsAdaptor',
             'chgnet = CHGNet.load()',
-            'struct = read("structure.cif")',
+            fix_imports,
+            'struct = read("structure.cif")']
+        for f in fixes:
+            script.append(f'struct.set_constraint({f})')
+        script += [            
             'relaxer = StructOptimizer(' + model_params + ')',
             'result = relaxer.relax(struct,' + params + ')',
             'final_structure = result["final_structure"]',
@@ -287,12 +305,29 @@ class CHGNet(AtomisticGenericJob):
                 else:
                     params.append(f'{p}={self.input.get(p)}')
         params = ','.join(params)
+        fix_imports = ''
+        fixes = []
+        if 'fix_imports' in self.input.keys():
+            fix_imports = self.input.get('fix_imports')
+        if 'fixes' in self.input.keys():
+            f = self.input.get('fixes')
+            if isinstance(f, str):                
+                fixes = [self.input.get('fixes')]
+            elif isinstance(f, list):
+                fixes = f
+            else:
+                self.logger.warning('Fixes are neither string or array of strings. Ignoring') 
+                    
         script = [
             'from chgnet.model import CHGNet, MolecularDynamics',
             'chgnet = CHGNet.load()',
             'from ase.io import read',
             'from ase.io.cif import write_cif',
-            'struct = read("structure.cif")',            
+            fix_imports,
+            'struct = read("structure.cif")']
+        for f in fixes:
+            script.append(f'struct.set_constraint({f})')
+        script += [
             'md = MolecularDynamics(atoms=struct,model=chgnet,'+params+')',
             f'md.run({self._generic_input["n_ionic_steps"]})',            
             'traj = read(f"md_run.traj", index=":")',
@@ -314,7 +349,7 @@ class CHGNet(AtomisticGenericJob):
         None
         """
         write(join(self.working_directory, 'structure.cif'), pyiron_to_ase(self.structure))
-        self.input.to_hdf(self.project_hdf5, group_name='input')                    
+        self.input.to_hdf(self.project_hdf5, group_name='input')
         if self._generic_input['calc_mode'] == 'md':
             self._write_calc_md()
         else:
@@ -342,8 +377,18 @@ class CHGNet(AtomisticGenericJob):
             A DataFrame containing the optimization results, or None if parsing fails.
         """
         try:
-            header = pd.read_csv(join(self.working_directory, output), skiprows=skip, nrows=0, sep='\s+')
-            df = pd.read_csv(join(self.working_directory, output), skiprows=skip+1, sep='\s+', header=None)
+            header = pd.read_csv(
+                join(self.working_directory, output), 
+                skiprows=skip, 
+                nrows=0, 
+                sep=r'\s+'
+            )
+            df = pd.read_csv(
+                join(self.working_directory, output), 
+                skiprows=skip+1, 
+                sep=r'\s+',
+                header=None
+            )
             df.columns = ['optimizer_class'] + list(header.columns[:])
             return df
         except:
@@ -368,8 +413,12 @@ class CHGNet(AtomisticGenericJob):
         pd.DataFrame or None
             A DataFrame containing the MD simulation results, or None if parsing fails.
         """
-        try:
-            df = pd.read_csv(join(self.working_directory, output), skiprows=1, sep='\s+')
+        try:            
+            df = pd.read_csv(
+                join(self.working_directory, output), 
+                skiprows=1, 
+                sep=r'\s+'
+            )
             df.columns = ['Time', 'Etot', 'Epot', 'Ekin', 'T']
             return df
         except:
@@ -389,12 +438,13 @@ class CHGNet(AtomisticGenericJob):
         -------
         None
         """
+                    
         relaxed_ase_structure = read(join(self.working_directory, 'final_structure.cif'), format='cif')
         relaxed_pyiron_structure = ase_to_pyiron(relaxed_ase_structure)
 
         # Store the relaxed structure in the HDF5 group
         with self.project_hdf5.open('output') as h5out:
-            relaxed_pyiron_structure.to_hdf(h5out)
+            h5out['structure'] = relaxed_pyiron_structure
         self.structure = relaxed_pyiron_structure  # Update the job's structure
 
         # Parse trajectory        
@@ -411,7 +461,7 @@ class CHGNet(AtomisticGenericJob):
                 with self.project_hdf5.open('output/dft') as h5out:
                     h5out['magnetization'] = np.array([f for f in traj['magmoms'][:-1]])
             except:
-                self.logger.warning(f'Cannot parse output from {join(self.working_directory, traj_file)} file.')
+                self.logger.warning(f'Cannot parse output from {traj_file} file.')
         elif self._generic_input['calc_mode'] == 'md':            
             traj_file = self.input['trajectory']
             try:
@@ -419,8 +469,10 @@ class CHGNet(AtomisticGenericJob):
                 with self.project_hdf5.open('output/generic') as h5out:
                     h5out['cells'] = np.array([s.get_cell() for s in traj])
                     h5out['positions'] = np.array([s.positions for s in traj])
+                    h5out['stresses'] = np.array([s.get_stress() for s in traj])
+                    h5out['forces'] = np.array([s.get_forces() for s in traj])
             except:
-                self.logger.warning(f'Cannot parse output from {join(self.working_directory, traj_file)} file.')
+                self.logger.warning(f'Cannot parse output from {traj_file} file.')
 
         # Parse other properties
         if self._generic_input['calc_mode'] in ['static', 'minimize']:            
@@ -430,7 +482,7 @@ class CHGNet(AtomisticGenericJob):
                 h5out['energy_tot'] = df['Energy'].values
                 h5out['max_force'] = df['fmax'].values
                 h5out['steps'] = df['Step'].values
-        if self._generic_input['calc_mode'] == 'md':            
+        if self._generic_input['calc_mode'] == 'md':
             df = self._parse_calc_md(self.input['logfile'])
             with self.project_hdf5.open('output/generic') as h5out:
                 h5out['energy_pot'] = df['Epot'].values
@@ -528,4 +580,5 @@ class CalcParams(GenericParameters):
         super(CalcParams, self).__init__(
             table_name=table_name,
         )
+
 
