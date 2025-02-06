@@ -11,9 +11,9 @@
 
 # from wmaee.codes.vasp import automatic_kpoints, generate_potcar, write_incar, write_inputs, run_vasp, parse_output
 # __all__ = ['automatic_kpoints', 'generate_potcar', 'write_incar', 'write_inputs', 'run_vasp', 'parse_output']
-from wmaee.codes.pyiron.pyiron_CHGNet_job import CHGNet
+#from wmaee.codes.pyiron.pyiron_CHGNet_job import CHGNet
 
-__all__ = ['CHGNet']
+#__all__ = ['CHGNet']
 
 __version__ = '2.2'
 #from _version import __version__
