@@ -1,0 +1,21 @@
+2025-08-20 20:07:12.231358: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-08-20 20:07:12.232192: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-08-20 20:07:12.237071: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-08-20 20:07:12.265072: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-08-20 20:07:12.307567: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-08-20 20:07:12.307628: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-08-20 20:07:12.329034: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-08-20 20:07:13.888781: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Using cached GRACE model from /home/amin/.cache/grace/GRACE-2L-OMAT
+Model license: Academic Software License
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1755713240.452077  621971 service.cc:145] XLA service 0x55938120bfa0 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1755713240.452150  621971 service.cc:153]   StreamExecutor device (0): Host, Default Version
+2025-08-20 20:07:21.008413: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1755713254.438971  621971 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+      Step     Time          Energy          fmax
+FIRE:    0 20:07:34      -66.074232        0.249639
+FIRE:    1 20:07:34      -66.076673        0.218542
+FIRE:    2 20:07:35      -66.080283        0.161214
+FIRE:    3 20:07:35      -66.083229        0.087799
