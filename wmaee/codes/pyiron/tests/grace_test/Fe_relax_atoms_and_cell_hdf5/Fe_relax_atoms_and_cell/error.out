@@ -1,0 +1,57 @@
+2025-08-20 20:13:01.547923: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-08-20 20:13:01.549111: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-08-20 20:13:01.554105: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-08-20 20:13:01.572032: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-08-20 20:13:01.622218: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-08-20 20:13:01.622301: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-08-20 20:13:01.651469: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-08-20 20:13:03.324009: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Using cached GRACE model from /home/amin/.cache/grace/GRACE-2L-OMAT
+Model license: Academic Software License
+/home/amin/projects/mul/wmaee/wmaee/codes/pyiron/tests/grace_test/Fe_relax_atoms_and_cell_hdf5/Fe_relax_atoms_and_cell/calc_script.py:10: FutureWarning: Import ExpCellFilter from ase.filters
+  relaxation = FIRE(ECF(atoms=initial_structure, ), trajectory="relax.traj").run(fmax=0.1, steps=500)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1755713589.921721  622842 service.cc:145] XLA service 0x558170541db0 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1755713589.921804  622842 service.cc:153]   StreamExecutor device (0): Host, Default Version
+2025-08-20 20:13:10.466938: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1755713602.589426  622842 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+      Step     Time          Energy          fmax
+FIRE:    0 20:13:22      -66.074232        3.380730
+FIRE:    1 20:13:23      -65.863668        8.146390
+FIRE:    2 20:13:23      -66.133603        0.701074
+FIRE:    3 20:13:23      -65.962403        5.666826
+FIRE:    4 20:13:23      -66.017516        4.758543
+FIRE:    5 20:13:24      -66.093289        2.969607
+FIRE:    6 20:13:24      -66.137176        0.447843
+FIRE:    7 20:13:24      -66.113015        2.388337
+FIRE:    8 20:13:24      -66.115687        2.259319
+FIRE:    9 20:13:25      -66.120465        2.009654
+FIRE:   10 20:13:25      -66.126347        1.655272
+FIRE:   11 20:13:25      -66.132120        1.218176
+FIRE:   12 20:13:25      -66.136631        0.724613
+FIRE:   13 20:13:26      -66.139027        0.203629
+FIRE:   14 20:13:26      -66.139002        0.305259
+FIRE:   15 20:13:26      -66.139017        0.301488
+FIRE:   16 20:13:26      -66.139048        0.293994
+FIRE:   17 20:13:27      -66.139092        0.282872
+FIRE:   18 20:13:27      -66.139149        0.268267
+FIRE:   19 20:13:27      -66.139216        0.250381
+FIRE:   20 20:13:27      -66.139291        0.229468
+FIRE:   21 20:13:28      -66.139372        0.205843
+FIRE:   22 20:13:28      -66.139466        0.177007
+FIRE:   23 20:13:28      -66.139571        0.170445
+FIRE:   24 20:13:28      -66.139685        0.169316
+FIRE:   25 20:13:29      -66.139803        0.167848
+FIRE:   26 20:13:29      -66.139923        0.165943
+FIRE:   27 20:13:29      -66.140045        0.163491
+FIRE:   28 20:13:29      -66.140175        0.160383
+FIRE:   29 20:13:30      -66.140327        0.156522
+FIRE:   30 20:13:30      -66.140518        0.151809
+FIRE:   31 20:13:30      -66.140767        0.146131
+FIRE:   32 20:13:30      -66.141076        0.139349
+FIRE:   33 20:13:31      -66.141431        0.131286
+FIRE:   34 20:13:31      -66.141795        0.121718
+FIRE:   35 20:13:31      -66.142145        0.110457
+FIRE:   36 20:13:31      -66.142505        0.110192
+FIRE:   37 20:13:32      -66.142907        0.091529
