@@ -1,0 +1,31 @@
+2025-09-12 11:16:14.185025: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-09-12 11:16:14.185604: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-09-12 11:16:14.188364: I external/local_tsl/tsl/cuda/cudart_stub.cc:32] Could not find cuda drivers on your machine, GPU will not be used.
+2025-09-12 11:16:14.197928: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-09-12 11:16:14.220337: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-09-12 11:16:14.220368: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-09-12 11:16:14.233138: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-09-12 11:16:14.969321: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Using cached GRACE model from /home/amin/.cache/grace/GRACE-2L-OAM
+Model license: Academic Software License
+/home/amin/projects/mul/wmaee/wmaee/codes/pyiron/tests/grace_test/large_Fe_relax_hdf5/large_Fe_relax/calc_script.py:10: FutureWarning: Import ExpCellFilter from ase.filters
+  relaxation = FIRE(ECF(atoms=initial_structure, ), trajectory="relax.traj").run(fmax=0.1, steps=500)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1757668578.591273  282777 service.cc:145] XLA service 0x557d05d92300 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1757668578.591315  282777 service.cc:153]   StreamExecutor device (0): Host, Default Version
+2025-09-12 11:16:18.945430: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1757668585.616492  282777 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+      Step     Time          Energy          fmax
+FIRE:    0 11:16:25      -69.674257        1.729363
+FIRE:    1 11:16:25      -69.612121        4.014874
+FIRE:    2 11:16:26      -69.684177        0.789095
+FIRE:    3 11:16:26      -69.637124        3.479008
+FIRE:    4 11:16:26      -69.657238        2.668043
+FIRE:    5 11:16:26      -69.679950        1.278495
+FIRE:    6 11:16:26      -69.686439        0.332438
+FIRE:    7 11:16:26      -69.686490        0.314790
+FIRE:    8 11:16:26      -69.686579        0.280407
+FIRE:    9 11:16:27      -69.686690        0.231073
+FIRE:   10 11:16:27      -69.686798        0.169358
+FIRE:   11 11:16:27      -69.686881        0.098497
