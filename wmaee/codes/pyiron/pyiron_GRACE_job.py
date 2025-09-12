@@ -15,6 +15,7 @@ from tensorpotential.calculator import TPCalculator
 
 
 from ase.io import write, read
+import io
 from os.path import join
 from ase import Atoms
 from ase.constraints import ExpCellFilter
@@ -22,7 +23,6 @@ from ase.io.trajectory import Trajectory
 
 
 import pandas as pd
-import pickle
 import numpy as np
 from typing import Literal, Optional
 
@@ -498,9 +498,9 @@ class Grace(AtomisticGenericJob):
 
     def _parse_calc_minimize(self, output: str = 'error.out') -> Optional[pd.DataFrame]:
         """
-        Parse the output of a static calculation.
+        Parse the output of a minimization.
 
-        This function reads the static calculation output file and returns the
+        This function reads the minimization output file and returns the
         corresponding DataFrame containing the optimization step and energy information.
 
         Parameters
@@ -513,6 +513,9 @@ class Grace(AtomisticGenericJob):
         pd.DataFrame or None
             A DataFrame containing the optimization results, or None if parsing fails.
         """
+        # ASE optimizer
+        algo = self.input.get('algo', 'FIRE')
+
         try:
             # Find the header line dynamically
             with open(join(self.working_directory, output), 'r') as f:
@@ -525,15 +528,17 @@ class Grace(AtomisticGenericJob):
                 self.logger.warning(f'No table header found in {output}.')
                 return None
 
-            # Read the table using pandas
-            df = pd.read_csv(
-                join(self.working_directory, output),
-                sep=r'\s+',
-                skiprows=header_idx,
-                engine='python'
-            )
-            print(df.columns)
-            print("Printed energies:", df['Energy'])
+            table_lines = []
+            # Ensure that the line contains the expected algorithm
+            for line in lines[header_idx:]:
+                if algo in line.strip() or "Step" in line.strip():
+                    table_lines.append(line)
+
+            # Read table into DataFrame
+            table_str = ''.join(table_lines)
+            df = pd.read_csv(io.StringIO(table_str),
+                             sep=r'\s+', engine='python')
+
             return df
         except Exception as e:
             self.logger.warning(f'Cannot parse output from {output} file: {e}')
