@@ -328,8 +328,6 @@ class Grace(AtomisticGenericJob):
                 f'relaxation = {algo.upper()}(ECF(atoms=struct, {relax_cell_kwargs_str}), {algo_kwargs_str}).run({params_run})',]
 
         script += calc_script
-        # 'relaxed_structure = initial_structure',
-        # 'Etot = relaxed_structure.get_total_energy()',
         parse = ['write_cif("final_structure.cif", struct)']
         script += parse
 
