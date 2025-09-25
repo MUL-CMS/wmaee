@@ -32,7 +32,7 @@ class Grace(AtomisticGenericJob):
     Custom job class for using Grace within the pyiron framework.
 
     This class provides methods to perform static calculations, structure relaxation,
-    and molecular dynamics simulations using Grace umlips.
+    and molecular dynamics simulations using Grace UMLIPs.
 
     Attributes
     ----------
@@ -197,7 +197,8 @@ class Grace(AtomisticGenericJob):
 
         Parameters
         ----------
-        grace_model : str,
+        grace_model : str, {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6", "GRACE-FS-OAM",
+            "GRACE-1L-OAM", "GRACE-2L-OAM", "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
             The Grace model to use for the calculation. Default is "GRACE-2L-OMAT".
         algorithm : str, optional
             Choose an ASE algorithm for the ionic relaxation. Default is "FIRE".
@@ -287,33 +288,49 @@ class Grace(AtomisticGenericJob):
         self._generic_input['relax_cell'] = self.input.get('relax_cell', False)
         self._generic_input['save_path'] = self.input.get(
             'save_path', 'relax.traj')
-
+        
+        # Somewhat hidden feature of adding custom fixes
+        fix_imports = ''
+        fixes = []
+        if 'fix_imports' in self.input.keys():
+            fix_imports = self.input.get('fix_imports')
+        if 'fixes' in self.input.keys():
+            f = self.input.get('fixes')
+            if isinstance(f, str):                
+                fixes = [self.input.get('fixes')]
+            elif isinstance(f, list):
+                fixes = f
+            else:
+                self.logger.warning('Fixes are neither string or array of strings. Ignoring')     
         script = []
+        
         import_statements = ['from tensorpotential.calculator import grace_fm',
                              'from ase.io import read',
                              'from ase.io.cif import write_cif',
                              'from ase.io.trajectory import Trajectory',
                              'from ase.optimize import FIRE, BFGS',
-                             'from ase.constraints import ExpCellFilter as ECF',]
+                             'from ase.constraints import ExpCellFilter as ECF',
+                             fix_imports,]
         script += import_statements
 
-        init_calc = [f'initial_structure = read("structure.cif")',
-                     f'calc = grace_fm("{model}")',
-                     'initial_structure.calc = calc',]
+        init_calc = [f'struct = read("structure.cif")',
+                     f'struct.calc = grace_fm("{model}")']
         script += init_calc
+
+        for f in fixes:
+            script.append(f'struct.set_constraint({f})')
 
         if not relax_cell:
             calc_script = [
-                f'relaxation = {algo.upper()}(atoms=initial_structure, {algo_kwargs_str}).run({params_run})',]
+                f'relaxation = {algo.upper()}(atoms=struct, {algo_kwargs_str}).run({params_run})',]
         else:
             calc_script = [
-                f'relaxation = {algo.upper()}(ECF(atoms=initial_structure, {relax_cell_kwargs_str}), {algo_kwargs_str}).run({params_run})',]
+                f'relaxation = {algo.upper()}(ECF(atoms=struct, {relax_cell_kwargs_str}), {algo_kwargs_str}).run({params_run})',]
 
         script += calc_script
-
-        parse = ['relaxed_structure = initial_structure',
-                 'Etot = relaxed_structure.get_total_energy()',
-                 'write_cif("final_structure.cif", relaxed_structure)']
+        # 'relaxed_structure = initial_structure',
+        # 'Etot = relaxed_structure.get_total_energy()',
+        parse = ['write_cif("final_structure.cif", struct)']
         script += parse
 
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
@@ -490,7 +507,7 @@ class Grace(AtomisticGenericJob):
             # df.columns = ['optimizer_class'] + list(header.columns[:])
             df.columns = list(header.columns[:])
 
-            print(df.columns)
+            # print(df.columns)
             return df
         except:
             self.logger.warning(f'Cannot parse output from {output} file.')
