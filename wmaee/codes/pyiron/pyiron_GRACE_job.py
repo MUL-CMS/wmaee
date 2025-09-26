@@ -22,7 +22,6 @@ from ase import Atoms
 from ase.constraints import ExpCellFilter
 from ase.io.trajectory import Trajectory
 
-
 import pandas as pd
 import numpy as np
 from typing import Literal, Optional
@@ -214,19 +213,11 @@ class Grace(AtomisticGenericJob):
         """
 
         try:
-            header = pd.read_csv(
+            df = pd.read_csv(
                 join(self.working_directory, output),
-                skiprows=skip,
-                nrows=0,
-                sep=r'\t+'
+                sep=r"\t+", 
+                engine="python"
             )
-            df = pd.read_table(
-                join(self.working_directory, output),
-                skiprows=skip+1,
-                sep=r'\t+',
-                header=None
-            )
-            df.columns = list(header.columns[:])
             # convert strings to np.array
             df['forces'] = df['forces'].apply(lambda x: np.array(ast.literal_eval(x)))
             df['stresses'] = df['stresses'].apply(lambda x: np.array(ast.literal_eval(x)))
