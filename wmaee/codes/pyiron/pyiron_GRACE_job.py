@@ -10,12 +10,13 @@ from pyiron_atomistics.atomistics.job.atomistic import AtomisticGenericJob
 from pyiron_atomistics import pyiron_to_ase, ase_to_pyiron
 from pyiron_base import GenericParameters
 
-from tensorpotential.calculator import grace_fm
-from tensorpotential.calculator import TPCalculator
+# from tensorpotential.calculator import grace_fm
+# from tensorpotential.calculator import TPCalculator
 
 
 from ase.io import write, read
 import io
+import ast
 from os.path import join
 from ase import Atoms
 from ase.constraints import ExpCellFilter
@@ -66,7 +67,7 @@ class Grace(AtomisticGenericJob):
         """
         Maximum force tolerance for ionic relaxation.
 
-        This property sets the maximum force tolerance (in eV/Å) used during ionic relaxation.
+        This property controls the maximum force tolerance (in eV/Å) used during ionic relaxation.
 
         Returns
         -------
@@ -90,27 +91,31 @@ class Grace(AtomisticGenericJob):
     @property
     def max_iter(self) -> int:
         """
-        Get the maximum number of iterations for relaxation.
+        Get the maximum number of iterations for relaxation or MD run.
 
         Returns
         -------
         int
             Maximum number of iterations.
         """
-        return self._generic_input['n_print']
+        return self._generic_input['max_iter']
 
     @max_iter.setter
     def max_iter(self, max_iter: int):
         """
-        Set the maximum number of iterations for relaxation.
+        Set the maximum number of iterations for relaxation or MD run.
 
         Parameters
         ----------
         max_iter : int
             Maximum number of iterations.
         """
-        self._generic_input['n_print'] = max_iter
+        self._generic_input['max_iter'] = max_iter
 
+
+    ####################################################
+    ### --- IMPLEMENTATION OF STATIC CALCULATION --- ###
+    ####################################################
     def calc_static(
         self,
         grace_model: Literal["GRACE-1L-MP-r6", "GRACE-2L-MP-r5",
@@ -121,31 +126,35 @@ class Grace(AtomisticGenericJob):
     ):
         """
         Perform a static calculation.
-
+    
         Parameters
         ----------
-        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6", "GRACE-FS-OAM",
-        "GRACE-1L-OAM", "GRACE-2L-OAM", "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
+        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
+                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
             The Grace model to use for the calculation. Default is "GRACE-2L-OMAT".
-
-        This method sets up the Grace calculator with the specified model and prepares
-        the job for a static calculation. The structure must be set before calling this method.
-
+    
         Raises
         ------
         ValueError
             If the structure is not set before calling this method.
+    
+        Notes
+        -----
+        This method sets up the Grace calculator with the specified model and
+        prepares the job for a static calculation. The structure must be set
+        before calling this method.
+    
+        Returns
+        -------
+        None
         """
         if self.structure is None:
             raise ValueError(
                 "Structure must be set before calling calc_static().")
-
-        # Set up the Grace calculator
-        calc = grace_fm(grace_model)
-        self.structure.calc = calc
         self._generic_input["calc_mode"] = "static"
         self._generic_input["model"] = grace_model
-
+        
     def _write_calc_static(self):
         """
         Write the calculation script for performing static calculations.
@@ -159,23 +168,77 @@ class Grace(AtomisticGenericJob):
             'from tensorpotential.calculator import grace_fm',
             'from ase.io import read',
             'from ase.io.cif import write_cif',
-            '\ninitial_structure = read("structure.cif")']
-        script += [
+            '',
+            'initial_structure = read("structure.cif")',
             f'initial_structure.calc = grace_fm("{model}")',
-            '\n# perform the static calculation',
+            '',
+            '# perform the static calculation',
             'energy_pot = initial_structure.get_total_energy()',
             'forces = initial_structure.get_forces()',
             'stresses = initial_structure.get_stress()',
-            '\n# write the results to an output file',
+            '',
+            '# write the results to an output file',
             'with open("log.out", "w") as f:',
             '    f.write("step\tenergy_pot\tforces\tstresses\\n")',
             '    f.write(f"1\\t{energy_pot}\\t{forces.tolist()}\\t{stresses.tolist()}\\n")',
-            '\n # write the final structure to a CIF file',
+            '',
+            '# write the final structure to a CIF file',
             'write_cif("final_structure.cif", initial_structure)',
         ]
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
+    def _parse_calc_static(
+        self, 
+        output: str = 'log.out', 
+        skip: int = 0
+    ) -> Optional[pd.DataFrame]:
+        """
+        Parse the output of a static calculation and return optimization results.
+    
+        This method reads a static calculation output file and extracts the 
+        optimization steps and energy information, returning them as a DataFrame.
+    
+        Parameters
+        ----------
+        output : str, optional
+            Name of the output file to parse. Default is 'log.out'.
+        skip : int, optional
+            Number of rows to skip at the start of the file before parsing. Default is 0.
+    
+        Returns
+        -------
+        pd.DataFrame or None
+            A DataFrame containing the optimization results if parsing succeeds,
+            otherwise None.
+        """
+
+        try:
+            header = pd.read_csv(
+                join(self.working_directory, output),
+                skiprows=skip,
+                nrows=0,
+                sep=r'\t+'
+            )
+            df = pd.read_table(
+                join(self.working_directory, output),
+                skiprows=skip+1,
+                sep=r'\t+',
+                header=None
+            )
+            df.columns = list(header.columns[:])
+            # convert strings to np.array
+            df['forces'] = df['forces'].apply(lambda x: np.array(ast.literal_eval(x)))
+            df['stresses'] = df['stresses'].apply(lambda x: np.array(ast.literal_eval(x)))
+            return df
+        except:
+            self.logger.warning(f'Cannot parse output from {output} file.')
+            return None        
+
+    
+    ##########################################################
+    ### --- IMPLEMENTATION OF MINIMIZATION CALCULATION --- ###
+    ##########################################################
     def calc_minimize(
         self,
         grace_model: Literal["GRACE-1L-MP-r6", "GRACE-2L-MP-r5",
@@ -232,7 +295,7 @@ class Grace(AtomisticGenericJob):
         self._generic_input['ionic_force_tolerance'] = ionic_force_tolerance
         self._generic_input['n_print'] = n_print
         self.input['save_path'] = save_path
-
+    
     def _write_calc_minimize(self):
         """
         Write the calculation script for performing structure relaxation.
@@ -334,6 +397,58 @@ class Grace(AtomisticGenericJob):
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
+    def _parse_calc_minimize(self, output: str = 'error.out') -> Optional[pd.DataFrame]:
+        """
+        Parse the output of a minimization.
+
+        This function reads the minimization output file and returns the
+        corresponding DataFrame containing the optimization step and energy information.
+
+        Parameters
+        ----------
+        output : str, optional
+            The name of the output file to parse, by default 'error.out'.
+
+        Returns
+        -------
+        pd.DataFrame or None
+            A DataFrame containing the optimization results, or None if parsing fails.
+        """
+        # ASE optimizer
+        algo = self.input.get('algo', 'FIRE')
+
+        try:
+            # Find the header line dynamically
+            with open(join(self.working_directory, output), 'r') as f:
+                lines = f.readlines()
+            for i, line in enumerate(lines):
+                if line.strip().startswith('Step'):
+                    header_idx = i
+                    break
+            else:
+                self.logger.warning(f'No table header found in {output}.')
+                return None
+
+            table_lines = []
+            # Ensure that the line contains the expected algorithm
+            for line in lines[header_idx:]:
+                if algo in line.strip() or "Step" in line.strip():
+                    table_lines.append(line)
+
+            # Read table into DataFrame
+            table_str = ''.join(table_lines)
+            df = pd.read_csv(io.StringIO(table_str),
+                             sep=r'\s+', engine='python')
+
+            return df
+        except Exception as e:
+            self.logger.warning(f'Cannot parse output from {output} file: {e}')
+            return None
+
+
+    ################################################
+    ### --- IMPLEMENTATION OF MD CALCULATION --- ###
+    ################################################
     def calc_md(
         self,
         temperature=300,
@@ -448,117 +563,6 @@ class Grace(AtomisticGenericJob):
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
-    def write_input(self) -> None:
-        """
-        Write input files required for the Grace calculation.
-
-        This function writes the structure file (`structure.cif`), stores the input
-        dictionary to the HDF5 format, and delegates further writing depending on the
-        calculation mode (MD or static/minimize).
-
-        Returns
-        -------
-        None
-        """
-        write(join(self.working_directory, 'structure.cif'),
-              pyiron_to_ase(self.structure))
-        self.input.to_hdf(self.project_hdf5, group_name='input')
-        if self._generic_input['calc_mode'] == 'md':
-            self._write_calc_md()
-        elif self._generic_input['calc_mode'] == 'static':
-            self._write_calc_static()
-        else:
-            self._write_calc_minimize()
-
-    def _parse_calc_static(self, output: str = 'log.out', skip: int = 0) -> Optional[pd.DataFrame]:
-        """
-        Parse the output of a static calculation.
-
-        This function reads the static calculation output file and returns the
-        corresponding DataFrame containing the optimization step and energy information.
-
-        Parameters
-        ----------
-        output : str, optional
-            The name of the output file to parse, by default 'log.out'.
-        skip : int, optional
-            The number of rows to skip at the start of the file, by default 3.
-
-        Returns
-        -------
-        pd.DataFrame or None
-            A DataFrame containing the optimization results, or None if parsing fails.
-        """
-        try:
-            header = pd.read_csv(
-                join(self.working_directory, output),
-                skiprows=skip,
-                nrows=0,
-                sep=r'\t+'
-            )
-            df = pd.read_table(
-                join(self.working_directory, output),
-                skiprows=skip+1,
-                sep=r'\t+',
-                header=None
-            )
-            # df.columns = ['optimizer_class'] + list(header.columns[:])
-            df.columns = list(header.columns[:])
-
-            # print(df.columns)
-            return df
-        except:
-            self.logger.warning(f'Cannot parse output from {output} file.')
-            return None
-
-    def _parse_calc_minimize(self, output: str = 'error.out') -> Optional[pd.DataFrame]:
-        """
-        Parse the output of a minimization.
-
-        This function reads the minimization output file and returns the
-        corresponding DataFrame containing the optimization step and energy information.
-
-        Parameters
-        ----------
-        output : str, optional
-            The name of the output file to parse, by default 'error.out'.
-
-        Returns
-        -------
-        pd.DataFrame or None
-            A DataFrame containing the optimization results, or None if parsing fails.
-        """
-        # ASE optimizer
-        algo = self.input.get('algo', 'FIRE')
-
-        try:
-            # Find the header line dynamically
-            with open(join(self.working_directory, output), 'r') as f:
-                lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.strip().startswith('Step'):
-                    header_idx = i
-                    break
-            else:
-                self.logger.warning(f'No table header found in {output}.')
-                return None
-
-            table_lines = []
-            # Ensure that the line contains the expected algorithm
-            for line in lines[header_idx:]:
-                if algo in line.strip() or "Step" in line.strip():
-                    table_lines.append(line)
-
-            # Read table into DataFrame
-            table_str = ''.join(table_lines)
-            df = pd.read_csv(io.StringIO(table_str),
-                             sep=r'\s+', engine='python')
-
-            return df
-        except Exception as e:
-            self.logger.warning(f'Cannot parse output from {output} file: {e}')
-            return None
-
     def _parse_calc_md(self, output: str = 'md_run.log') -> Optional[pd.DataFrame]:
         """
         Parse the output of a molecular dynamics (MD) simulation.
@@ -588,14 +592,43 @@ class Grace(AtomisticGenericJob):
             self.logger.warning(f'Cannot parse output from {output} file.')
             return None
 
+    ###############################
+    ### --- COMMON FUNCTION --- ###
+    ###############################
+    def write_input(self) -> None:
+        """
+        Write input files required for the Grace calculation.
+
+        This function writes the structure file (`structure.cif`), stores the input
+        dictionary to the HDF5 format, and delegates further writing depending on the
+        calculation mode (MD or static/minimize).
+
+        Returns
+        -------
+        None
+        """
+        write(join(self.working_directory, 'structure.cif'),
+              pyiron_to_ase(self.structure))
+        self.input.to_hdf(self.project_hdf5, group_name='input')
+        if self._generic_input['calc_mode'] == 'static':
+            self._write_calc_static()
+        elif self._generic_input['calc_mode'] == 'minimize':
+            self._write_calc_minimize()
+        elif self._generic_input['calc_mode'] == 'md':
+            self._write_calc_md()
+        else:
+            raise ValueError(
+                "No calculation type set. Use calc_static(), calc_minimize() or calc_md() first.")
+            
     def collect_output(self) -> None:
         """
-        Collect and store the results of the calculation.
-
-        This function parses the final structure, trajectory, and other output properties,
-        and stores them in the HDF5 format. The structure is updated, and various properties
-        such as energies, forces, and magnetization are saved to the output group.
-
+        Collect and store the results of a calculation.
+    
+        This method parses the final structure, trajectory, and other output properties
+        from the calculation and stores them in HDF5 format. The internal structure
+        is updated, and various properties such as energies, structure, forces, and 
+        stresses are saved to the output group.
+    
         Returns
         -------
         None
@@ -655,11 +688,15 @@ class Grace(AtomisticGenericJob):
 
         # Parse other properties
         if self._generic_input['calc_mode'] == 'static':
-            df = self._parse_calc_static()
+            df = self._parse_calc_static()  
+            df['max_force'] = df['forces'].apply(lambda x: np.max(x))
             with self.project_hdf5.open('output/generic') as h5out:
                 h5out['energy_pot'] = df['energy_pot'].values
                 h5out['energy_tot'] = df['energy_pot'].values
-                h5out['max_force'] = np.array(df['forces'].values).max()
+                h5out['forces'] = df['forces'].values
+                h5out['max_force'] = df['max_force'].values
+                h5out['stresses'] = np.array(
+                    [voigt_to_tensor(s)*160.2 for s in df['stresses'].values])
                 h5out['steps'] = df['step'].values
         elif self._generic_input['calc_mode'] == 'minimize':
             df = self._parse_calc_minimize()
