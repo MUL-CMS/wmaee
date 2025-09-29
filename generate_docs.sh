@@ -9,6 +9,7 @@ codes/lammps
 codes/pyiron/pyiron_cluster.py
 codes/pyiron/pyiron_NEB_task.py
 codes/pyiron/pyiron_CHGNet_job.py
+codes/pyiron/pyiron_Grace_job.py
 core/io.py
 core/config.py
 core/data_structs.py
