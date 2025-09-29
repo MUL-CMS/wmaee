@@ -27,7 +27,7 @@ import pandas as pd
 import numpy as np
 from typing import Literal, Optional
 
-_EV_PER_ANG3_TO_GPA = 160.21766208
+from wmaee.units import EV_PER_ANG3_TO_GPA
 
 
 class Grace(AtomisticGenericJob):
@@ -614,7 +614,7 @@ class Grace(AtomisticGenericJob):
         else:
             pressure = self._generic_input["pressure"]
             if not pressure == None:
-                pressure /= _EV_PER_ANG3_TO_GPA
+                pressure /= EV_PER_ANG3_TO_GPA
             pfactor = self._generic_input["pressure_damping_timescale"]
             if not pfactor == None:
                 pfactor *= units.fs
@@ -786,7 +786,7 @@ class Grace(AtomisticGenericJob):
                 h5out['forces'] = df['forces'].values
                 h5out['max_force'] = df['max_force'].values
                 h5out['stresses'] = np.array(
-                    [voigt_to_tensor(s)*_EV_PER_ANG3_TO_GPA for s in df['stresses'].values])
+                    [voigt_to_tensor(s)*EV_PER_ANG3_TO_GPA for s in df['stresses'].values])
                 h5out['steps'] = df['step'].values
         elif self._generic_input['calc_mode'] == 'minimize':
             df = self._parse_calc_minimize()
