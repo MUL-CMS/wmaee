@@ -369,7 +369,8 @@ class Grace(AtomisticGenericJob):
         ]
         if relax_cell:
             script += ['from ase.constraints import ExpCellFilter as ECF']
-        script += fix_imports
+        for f in fix_imports:
+            script += [f]
         script += ['']
 
         script += [
@@ -568,7 +569,8 @@ class Grace(AtomisticGenericJob):
         else:
             self.logger.warning(
                 'Fixes are neither string or array of strings. Ignoring')
-        fix_imports = self.input.get('fixes_imports', [])
+            fixes = []
+        fix_imports = self.input.get('fix_imports', [])
         if isinstance(fix_imports, str):
             fix_imports = [fix_imports]
         elif isinstance(fix_imports, list):
@@ -576,7 +578,8 @@ class Grace(AtomisticGenericJob):
         else:
             self.logger.warning(
                 'fix_imports are neither string or array of strings. Ignoring')
-
+            fix_imports = []
+        
         script = [
             'from tensorpotential.calculator import grace_fm',
             'from ase.md.velocitydistribution import MaxwellBoltzmannDistribution',
@@ -742,40 +745,25 @@ class Grace(AtomisticGenericJob):
         self.structure = relaxed_pyiron_structure  # Update the job's structure
 
         # Parse trajectory from minimize
-        if self._generic_input['calc_mode'] == 'minimize':
-            # For minimize, we expect a trajectory file with the relaxed structure
-            traj_file = self.input['save_path']
-            try:
-                file = join(self.working_directory, traj_file)
-                # use ASE Trajectory to read the file
-                traj = Trajectory(file)
-                with self.project_hdf5.open('output/generic') as h5out:
-                    h5out['cells'] = np.array(
-                        [atoms.get_cell() for atoms in traj])
-                    h5out['positions'] = np.array(
-                        [atoms.positions for atoms in traj])
-                    h5out['stresses'] = np.array(
-                        [voigt_to_tensor(atoms.get_stress()) for atoms in traj])
-                    h5out['forces'] = np.array(
-                        [atoms.get_forces() for atoms in traj])
-            except:
-                self.logger.warning(
-                    f'Cannot parse output from {traj_file} file.')
-        elif self._generic_input['calc_mode'] == 'md':
-            # Parse trajectory from MD
-            traj_file = self.input['trajectory']
-            try:
+        if self._generic_input['calc_mode'] in ['minimize', 'md']:
+            # For minimize and md, we expect a trajectory file with the relaxed structure
+            if self._generic_input['calc_mode'] == 'minimize':
+                traj_file = self.input['save_path']
+                traj = Trajectory(join(self.working_directory, traj_file))
+            else:
+                traj_file = self.input['trajectory']
                 traj = read(join(self.working_directory, traj_file), index=":")
+            try:
                 with self.project_hdf5.open('output/generic') as h5out:
                     h5out['cells'] = np.array([s.get_cell() for s in traj])
                     h5out['positions'] = np.array([s.positions for s in traj])
                     h5out['stresses'] = np.array(
-                        [s.get_stress() for s in traj])
+                        [voigt_to_tensor(s.get_stress()) for s in traj])
                     h5out['forces'] = np.array([s.get_forces() for s in traj])
             except:
                 self.logger.warning(
                     f'Cannot parse output from {traj_file} file.')
-
+        
         # Parse other properties
         if self._generic_input['calc_mode'] == 'static':
             df = self._parse_calc_static()  
@@ -793,8 +781,8 @@ class Grace(AtomisticGenericJob):
             with self.project_hdf5.open('output/generic') as h5out:
                 h5out['energy_pot'] = df['Energy'].values
                 h5out['energy_tot'] = df['Energy'].values
-                h5out['forces'] = df['fmax'].values
-                h5out['steps'] = df['Step'].values
+                h5out['max_force'] = df['fmax'].values
+                h5out['steps'] = df['Step'].values        
         elif self._generic_input['calc_mode'] == 'md':
             df = self._parse_calc_md(self.input['logfile'])
             with self.project_hdf5.open('output/generic') as h5out:
