@@ -21,10 +21,13 @@ from os.path import join
 from ase import Atoms
 from ase.constraints import ExpCellFilter
 from ase.io.trajectory import Trajectory
+from typing import Tuple
 
 import pandas as pd
 import numpy as np
 from typing import Literal, Optional
+
+_EV_PER_ANG3_TO_GPA = 160.21766208
 
 
 class Grace(AtomisticGenericJob):
@@ -150,9 +153,9 @@ class Grace(AtomisticGenericJob):
         """
         if self.structure is None:
             raise ValueError(
-                "Structure must be set before calling calc_static().")
-        self._generic_input["calc_mode"] = "static"
-        self._generic_input["model"] = grace_model
+                'Structure must be set before calling calc_static().')
+        self._generic_input['calc_mode'] = 'static'
+        self.input['model'] = grace_model
         
     def _write_calc_static(self):
         """
@@ -161,7 +164,7 @@ class Grace(AtomisticGenericJob):
         This method generates a Python script that uses Grace for static calculations
         and writes it to a file in the working directory.
         """
-        model = self._generic_input["model"]
+        model = self.input["model"]
 
         script = [
             'from tensorpotential.calculator import grace_fm',
@@ -216,7 +219,7 @@ class Grace(AtomisticGenericJob):
             df = pd.read_csv(
                 join(self.working_directory, output),
                 sep=r"\t+", 
-                engine="python"
+                engine='python'
             )
             # convert strings to np.array
             df['forces'] = df['forces'].apply(lambda x: np.array(ast.literal_eval(x)))
@@ -230,47 +233,55 @@ class Grace(AtomisticGenericJob):
     ##########################################################
     ### --- IMPLEMENTATION OF MINIMIZATION CALCULATION --- ###
     ##########################################################
+
     def calc_minimize(
         self,
-        grace_model: Literal["GRACE-1L-MP-r6", "GRACE-2L-MP-r5",
-                             "GRACE-2L-MP-r6", "GRACE-FS-OAM",
-                             "GRACE-1L-OAM", "GRACE-2L-OAM",
-                             "GRACE-FS-OMAT", "GRACE-1L-OMAT",
-                             "GRACE-2L-OMAT"] = "GRACE-2L-OMAT",
+        grace_model: Literal[
+            "GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
+            "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+            "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"
+        ] = "GRACE-2L-OMAT",
         algorithm: Literal["FIRE", "BFGS", "LBFGS"] = "FIRE",
-        algorithm_kwargs: dict = None,
-        relax_cell: bool | None = False,
-        relax_cell_kwargs: dict = None,
-        ionic_force_tolerance: float = 0.1,
+        algorithm_kwargs: dict | None = None,
+        relax_cell: bool = False,
+        relax_cell_kwargs: dict | None = None,
+        ionic_force_tolerance: float = 0.001,
         max_iter: int = 500,
-        n_print: int = 1,
-        save_path: str | None = 'relax.traj'
-    ):
+        n_print : int = 1,
+        save_path: str | None = "relax.traj",
+    ) -> None:
         """
         Perform a structure relaxation (geometry optimization).
-
+    
         Parameters
         ----------
-        grace_model : str, {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6", "GRACE-FS-OAM",
-            "GRACE-1L-OAM", "GRACE-2L-OAM", "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
-            The Grace model to use for the calculation. Default is "GRACE-2L-OMAT".
-        algorithm : str, optional
-            Choose an ASE algorithm for the ionic relaxation. Default is "FIRE".
-        algorithm_kwargs: dict, optional
-            Additional keyword arguments for the chosen algorithm. Default is None.
-        relax_cell : bool or None, optional
-            Whether to allow relaxation of the simulation cell (default is False).
-        relax_cell_kwargs: dict, optional
-            Additional keyword arguments for cell relaxation (default is None).
+        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
+                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
+            The GRACE model to use for the calculation. Default is "GRACE-2L-OMAT".
+        algorithm : {"FIRE", "BFGS", "LBFGS"}, optional
+            Ionic relaxation algorithm from ASE. Default is "FIRE".
+        algorithm_kwargs : dict, optional
+            Additional keyword arguments for the relaxation algorithm. Default is None.
+        relax_cell : bool, optional
+            If True, relax the simulation cell. Default is False.
+        relax_cell_kwargs : dict, optional
+            Additional keyword arguments for cell relaxation. Default is None.
         ionic_force_tolerance : float, optional
-            Convergence criterion for forces (default is 0.1 eV/Å).
+            Convergence criterion for ionic forces in eV/Å. Default is 0.001.
         max_iter : int, optional
-            Maximum number of iterations (default is 500).
+            Maximum number of optimization steps. Default is 500.
         n_print : int, optional
-            Frequency of logging output (default is 1).
+            Frequency of logging output (structures/stresses). Default is 1.
         save_path : str or None, optional
-            Path to save the trajectory file (default is 'relax.traj').
+            File path to save the relaxation trajectory. Default is "relax.traj".
+    
+        Returns
+        -------
+        None
         """
+
+        
         super().calc_minimize(
             ionic_energy_tolerance=0,
             ionic_force_tolerance=ionic_force_tolerance,
@@ -278,13 +289,15 @@ class Grace(AtomisticGenericJob):
         )
 
         # Saving the parameters in dictionary
-        self._generic_input["model"] = grace_model
+        self._generic_input['calc_mode'] = 'minimize'
+        self.input['model'] = grace_model
         self.input['algo'] = algorithm
         self.input['algo_kwargs'] = algorithm_kwargs or {}
         self.input['relax_cell'] = relax_cell
         self.input['relax_cell_kwargs'] = relax_cell_kwargs or {}
         self._generic_input['ionic_force_tolerance'] = ionic_force_tolerance
         self._generic_input['n_print'] = n_print
+        self._generic_input['max_iter'] = max_iter
         self.input['save_path'] = save_path
     
     def _write_calc_minimize(self):
@@ -294,27 +307,17 @@ class Grace(AtomisticGenericJob):
         This method generates a Python script that uses Grace for structure
         relaxation and writes it to a file in the working directory.
         """
-        # Extract parameters from dictionary
 
-        # Grace model
-        model = self._generic_input["model"]
-
-        # ASE optimizer
-        algo = self.input.get('algo', 'FIRE')
-
-        # Print warning if algo not in allowed list
+        model = self.input['model'] # Grace model
+        algo = self.input.get('algo', 'FIRE') # ASE optimizer
         if algo not in ['FIRE', 'BFGS', 'LBFGS']:
             raise ValueError(
                 f"Unsupported optimizer: {algo}. Supported optimizers are: FIRE, BFGS, LBFGS.")
-
         # ASE optimizer kwargs
         algo_kwargs = self.input.get('algo_kwargs', {}).copy()
-
-        # Add trajectory parameter
-        save_path = self.input.get("save_path", "relax.traj")
-        print("Trajectory name:", save_path)
+        save_path = self.input.get('save_path', 'relax.traj') # Add trajectory parameter
         algo_kwargs['trajectory'] = f"{save_path}"
-
+        algo_kwargs['loginterval'] = self._generic_input['n_print']
         # Reformat dictionary to string
         algo_kwargs_str = ", ".join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
@@ -323,67 +326,69 @@ class Grace(AtomisticGenericJob):
 
         # Cell relaxation
         relax_cell = self.input.get('relax_cell', False)
-
         # Cell relaxation kwargs ---> see ase.constraints.ExpCellFilter
         relax_cell_kwargs = self.input.get('relax_cell_kwargs', {})
-
         # Reformat dictionary to string
-        # Convert to string for script
         relax_cell_kwargs_str = ", ".join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
             for k, v in relax_cell_kwargs.items()
         )
 
         # Set parameters for minimization
-        params_run = f"fmax={self._generic_input['ionic_force_tolerance']}, steps={self._generic_input['max_iter']}"
+        params_run = f"fmax={self._generic_input['ionic_force_tolerance']}, steps={self._generic_input['max_iter']}" 
 
-        # Save parameters in
-        self._generic_input['calc_mode'] = 'minimize'
-        self._generic_input['relax_cell'] = self.input.get('relax_cell', False)
-        self._generic_input['save_path'] = self.input.get(
-            'save_path', 'relax.traj')
+        # Save parameters in        
+        self._generic_input['relax_cell'] = relax_cell
+        self._generic_input['save_path'] = save_path
         
         # Somewhat hidden feature of adding custom fixes
-        fix_imports = ''
-        fixes = []
-        if 'fix_imports' in self.input.keys():
-            fix_imports = self.input.get('fix_imports')
-        if 'fixes' in self.input.keys():
-            f = self.input.get('fixes')
-            if isinstance(f, str):                
-                fixes = [self.input.get('fixes')]
-            elif isinstance(f, list):
-                fixes = f
-            else:
-                self.logger.warning('Fixes are neither string or array of strings. Ignoring')     
-        script = []
-        
-        import_statements = ['from tensorpotential.calculator import grace_fm',
-                             'from ase.io import read',
-                             'from ase.io.cif import write_cif',
-                             'from ase.io.trajectory import Trajectory',
-                             'from ase.optimize import FIRE, BFGS',
-                             'from ase.constraints import ExpCellFilter as ECF',
-                             fix_imports,]
-        script += import_statements
+        # TODO: Document? Make it a more "official" paramerer?
+        fixes = self.input.get('fixes', [])
+        if isinstance(fixes, str):
+            fixes = [fixes]
+        elif isinstance(fixes, list):
+            pass
+        else:
+            self.logger.warning('Fixes are neither string or array of strings. Ignoring')
+            fixes = []
+        fix_imports = self.input.get('fix_imports', [])
+        if isinstance(fix_imports, str):                
+            fix_imports = [fix_imports]
+        elif isinstance(fix_imports, list):
+            pass
+        else:
+            self.logger.warning('Fix imports are neither string or array of strings. Ignoring')
+            fix_imports = []
+            
+        script = [
+            'from tensorpotential.calculator import grace_fm',
+            'from ase.io import read',
+            'from ase.io.cif import write_cif',
+            'from ase.io.trajectory import Trajectory',
+            f'from ase.optimize import {algo}',
+        ]
+        if relax_cell:
+            script += ['from ase.constraints import ExpCellFilter as ECF']
+        script += fix_imports
+        script += ['']
 
-        init_calc = [f'struct = read("structure.cif")',
-                     f'struct.calc = grace_fm("{model}")']
-        script += init_calc
-
+        script += [
+            f'struct = read("structure.cif")',
+            f'struct.calc = grace_fm("{model}")'
+        ]
         for f in fixes:
             script.append(f'struct.set_constraint({f})')
-
+        script += ['']
+        
         if not relax_cell:
-            calc_script = [
+            script += [
                 f'relaxation = {algo.upper()}(atoms=struct, {algo_kwargs_str}).run({params_run})',]
         else:
-            calc_script = [
-                f'relaxation = {algo.upper()}(ECF(atoms=struct, {relax_cell_kwargs_str}), {algo_kwargs_str}).run({params_run})',]
+            script += [
+                f'relaxation = {algo.upper()}(ECF(atoms=struct, {relax_cell_kwargs_str}), {algo_kwargs_str}).run({params_run})']
+        script += ['']
 
-        script += calc_script
-        parse = ['write_cif("final_structure.cif", struct)']
-        script += parse
+        script += ['write_cif("final_structure.cif", struct)']
 
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
@@ -442,49 +447,91 @@ class Grace(AtomisticGenericJob):
     ################################################
     def calc_md(
         self,
-        temperature=300,
-        pressure=None,
-        n_ionic_steps=100,
-        time_step=2.0,  # in femto-seconds
-        n_print=10,
-        temperature_damping_timescale=100.0,  # taut: float | None = None,
-        pressure_damping_timescale=None,  # taup: float | None = None,
-        trajectory="md_run.traj",
-        logfile="md_run.log",
-        on_isolated_atoms: Literal["ignore", "warn", "error"] = "warn",
+        grace_model: Literal[
+            "GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
+            "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+            "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"
+        ] = "GRACE-2L-OMAT",
+        ensemble: Literal["NVT", "nvt", "Langevin", "langevin", "NPT", "npt"] = "NVT", 
+        temperature: float = 300.0,
         starting_temperature: int | None = None,
-        ensemble: str = "nvt",
+        pressure: float | None = None,
+        time_step: float = 2.0,
+        n_ionic_steps: int = 100,
+        n_print: int = 10,
+        temperature_damping_timescale: float = 100.0,
+        pressure_damping_timescale: float | None = None,
+        trajectory: str = "md_run.traj",
+        logfile: str = "md_run.log",
+        random_seed: int | None = None,
+        mask: Tuple[int] | np.ndarray | None = None
     ):
         """
-        Not implemented yet.
-
+        Run a molecular dynamics simulation using a GRACE foundation model.
+    
         Parameters
         ----------
+        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
+                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
+            Choice of GrACE foundation model (default is "GRACE-2L-OMAT").
+    
+        ensemble : {"NVT", "nvt", "Langevin", "langevin", "NPT", "npt"}, optional
+            Type of statistical ensemble:
+            - "NVT" or "Langevin": constant volume and temperature.
+            - "NPT": constant pressure and temperature.
+            Case-insensitive (default is "NVT").
+    
         temperature : float, optional
-            Target temperature of the simulation in Kelvin (default is 300 K).
-        pressure : float or None, optional
-            Target pressure for the simulation in bar (default is None).
-        n_ionic_steps : int, optional
-            Number of ionic steps to simulate (default is 100).
-        time_step : float, optional
-            Time step for the simulation in femtoseconds (default is 2.0 fs).
-        n_print : int, optional
-            Frequency of printing simulation logs (default is 10).
-        temperature_damping_timescale : float, optional
-            Timescale for temperature damping in femtoseconds (default is 100.0 fs).
-        pressure_damping_timescale : float or None, optional
-            Timescale for pressure damping in femtoseconds (default is None).
-        trajectory : str, optional
-            Name of the output trajectory file (default is 'md_run.traj').
-        logfile : str, optional
-            Name of the output log file (default is 'md_run.log').
-        on_isolated_atoms : {'ignore', 'warn', 'error'}, optional
-            Behavior for isolated atoms (default is 'warn').
+            Target simulation temperature in Kelvin (default is 300.0).
+    
         starting_temperature : int or None, optional
-            Initial temperature of the simulation (default is the target temperature).
-        ensemble : str, optional
-            Ensemble type, e.g., 'nvt' or 'npt' (default is 'nvt').
+            Initial temperature of the system in Kelvin. If None, uses
+            the target `temperature` (default is None).
+    
+        pressure : float or None, optional
+            Target external pressure in GPa for NPT runs. Ignored if ensemble
+            is NVT or Langevin (default is None).
+    
+        time_step : float, optional
+            Integration time step in femtoseconds (default is 2.0 fs).
+    
+        n_ionic_steps : int, optional
+            Number of MD steps to perform (default is 100).
+    
+        n_print : int, optional
+            Frequency of log printing and trajectory writing (default is 10).
+    
+        temperature_damping_timescale : float, optional
+            Thermostat coupling time in femtoseconds (default is 100.0 fs).
+    
+        pressure_damping_timescale : float or None, optional
+            Barostat coupling time in femtoseconds. Only relevant for NPT runs
+            (default is None).
+    
+        trajectory : str, optional
+            Output trajectory file name (default is "md_run.traj").
+    
+        logfile : str, optional
+            Output log file name (default is "md_run.log").
+    
+        random_seed : int or None, optional
+            Seed for random velocity initialization. If None, system clock
+            is used (default is None).
+            
+        mask : None, sequence of 3 ints (0/1), or (3,3) array-like, optional
+            Specify which components of the computational box (strain tensor)
+            are allowed to change under the barostat (default is None equalling
+            to *No mask*). Only relevant for NPT simulations; it has no effect 
+            for NVT / Langevin ensembles.
         """
+        self._generic_input['calc_mode'] = 'md'
+        ensemble = ensemble.lower()
+        if ensemble in ['langevin', 'nvt']: #requested NVT, ignore NPT settings
+            pressure = None
+            mask = None
+        if pressure == None:
+            pressure_damping_timescale = None
         super().calc_md(
             temperature=temperature,
             pressure=pressure,
@@ -494,13 +541,15 @@ class Grace(AtomisticGenericJob):
             temperature_damping_timescale=temperature_damping_timescale,
             pressure_damping_timescale=pressure_damping_timescale,
         )
-        self.input['ensemble'] = ensemble
+        self.input['model'] = grace_model
+        self.input['ensemble'] = ensemble.lower()
         self.input['trajectory'] = trajectory
-        self.input['logfile'] = logfile
-        self.input['on_isolated_atoms'] = on_isolated_atoms
+        self.input['logfile'] = logfile 
         if starting_temperature is None:
             starting_temperature = temperature
         self.input['starting_temperature'] = starting_temperature
+        self.input['random_seed'] = random_seed
+        self.input['mask'] = mask
 
     def _write_calc_md(self):
         """
@@ -509,48 +558,94 @@ class Grace(AtomisticGenericJob):
         This method generates a Python script that uses CHGNet for running MD
         simulations and writes it to a file in the working directory.
         """
-        params = []
-        params += [f"temperature={self._generic_input['temperature']},pressure={self._generic_input['pressure']},timestep={self._generic_input['time_step']}"]
-        params += [f"loginterval={self._generic_input['n_print']},taut={self._generic_input['temperature_damping_timescale']},taup={self._generic_input['pressure_damping_timescale']}"]
-        allowed_params = ['ensemble', 'thermostat', 'starting_temperature', 'bulk_modulus',
-                          'crystal_feas_logfile', 'append_trajectory', 'use_device', 'trajectory', 'logfile', 'on_isolated_atoms']
-        for p in self.input.keys():
-            v = self.input.get(p)
-            if p in allowed_params and not v == None:
-                if isinstance(v, str):
-                    params.append(p+"=\""+v+"\"")
-                else:
-                    params.append(f'{p}={self.input.get(p)}')
-        params = ','.join(params)
-        fix_imports = ''
-        fixes = []
-        if 'fix_imports' in self.input.keys():
-            fix_imports = self.input.get('fix_imports')
-        if 'fixes' in self.input.keys():
-            f = self.input.get('fixes')
-            if isinstance(f, str):
-                fixes = [self.input.get('fixes')]
-            elif isinstance(f, list):
-                fixes = f
-            else:
-                self.logger.warning(
-                    'Fixes are neither string or array of strings. Ignoring')
+        # Somewhat hidden feature of adding custom fixes
+        # TODO: Document? Make it a more "official" paramerer?
+        fixes = self.input.get('fixes', [])
+        if isinstance(fixes, str):
+            fixes = [fixes]
+        elif isinstance(fixes, list):
+            pass
+        else:
+            self.logger.warning(
+                'Fixes are neither string or array of strings. Ignoring')
+        fix_imports = self.input.get('fixes_imports', [])
+        if isinstance(fix_imports, str):
+            fix_imports = [fix_imports]
+        elif isinstance(fix_imports, list):
+            pass
+        else:
+            self.logger.warning(
+                'fix_imports are neither string or array of strings. Ignoring')
 
         script = [
-            'from chgnet.model import CHGNet, MolecularDynamics',
-            'chgnet = CHGNet.load()',
+            'from tensorpotential.calculator import grace_fm',
+            'from ase.md.velocitydistribution import MaxwellBoltzmannDistribution',
             'from ase.io import read',
             'from ase.io.cif import write_cif',
-            fix_imports,
-            'struct = read("structure.cif")']
+            'from ase.io.trajectory import Trajectory',
+            'from ase import units'
+        ]
+        for f in fix_imports:
+            script += [f]
+        script += [
+            '',
+            'struct = read("structure.cif")',]
         for f in fixes:
             script.append(f'struct.set_constraint({f})')
         script += [
-            'md = MolecularDynamics(atoms=struct,model=chgnet,'+params+')',
-            f'md.run({self._generic_input["n_ionic_steps"]})',
-            'traj = read(f"md_run.traj", index=":")',
-            'write_cif("final_structure.cif", traj[-1])'
+            f'calc = grace_fm("{self.input["model"]}")',
+            'struct.calc = calc',
+            '',
         ]
+        if not self.input['random_seed'] == None:
+            script += [
+                'import numpy as np',
+                f'np.random.seed({self.input["random_seed"]})',
+            ]
+        script += [
+            f'MaxwellBoltzmannDistribution(struct, temperature_K={self.input["starting_temperature"]})',
+            '',
+        ]
+        if self.input['ensemble'] == 'langevin':
+            script += [
+                'from ase.md.langevin import Langevin',
+                f'dyn = Langevin(struct, timestep={self._generic_input["time_step"]}, temperature_K={self._generic_input["temperature"]}, friction={self._generic_input["temperature_damping_timescale"]})',
+                ]
+        else:
+            pressure = self._generic_input["pressure"]
+            if not pressure == None:
+                pressure /= _EV_PER_ANG3_TO_GPA
+            pfactor = self._generic_input["pressure_damping_timescale"]
+            if not pfactor == None:
+                pfactor *= units.fs
+            script += [
+                'from ase.md.npt import NPT',                
+                f'dyn = NPT(struct, timestep={self._generic_input["time_step"]}*units.fs, temperature_K={self._generic_input["temperature"]}, ttime={self._generic_input["temperature_damping_timescale"]}*units.fs, externalstress={pressure}, pfactor={pfactor} , mask={self._generic_input["mask"]})',
+                ]
+        script += [
+            f'traj = Trajectory("{self.input["trajectory"]}", "w", struct)',
+            f'dyn.attach(traj.write, interval={self._generic_input["n_print"]})',
+            '',
+            f'logfile = open("{self.input["logfile"]}", "w")',
+            'logfile.write("step\\tTime\\tEtot\\tEpot\\tEkin\\tT\\tVol\\ta\\tb\\tc\\tsigma_xx\\tsigma_yy\\tsigma_zz\\tsigma_yz\\tsigma_xz\\tsigma_xy\\n")',
+            'def print_status():',
+            '    values = [dyn.nsteps, dyn.nsteps*dyn.dt]',
+            '    values += [struct.get_potential_energy()+struct.get_kinetic_energy()]',
+            '    values += [struct.get_potential_energy(), struct.get_kinetic_energy()]',
+            '    values += [struct.get_temperature()]',
+            '    values += [struct.get_volume()]+list(struct.cell.lengths())',
+            '    values += list(struct.get_stress())',
+            '    status = "\\t".join(str(v) for v in values)',
+            '    print(status)',
+            '    logfile.write(status+"\\n")',
+            '    logfile.flush()',
+            f'dyn.attach(print_status, interval={self._generic_input["n_print"]})',
+            '',
+            f'dyn.run({self._generic_input["n_ionic_steps"]})',
+            '',
+            'write_cif("final_structure.cif", struct)'
+        ]
+
         with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
@@ -572,12 +667,16 @@ class Grace(AtomisticGenericJob):
             A DataFrame containing the MD simulation results, or None if parsing fails.
         """
         try:
+            # df = pd.read_csv(
+            #     join(self.working_directory, output),
+            #     skiprows=1,
+            #     sep=r'\s+'
+            # )
             df = pd.read_csv(
                 join(self.working_directory, output),
-                skiprows=1,
-                sep=r'\s+'
+                sep=r"\t+", 
+                engine='python'
             )
-            df.columns = ['Time', 'Etot', 'Epot', 'Ekin', 'T']
             return df
         except:
             self.logger.warning(f'Cannot parse output from {output} file.')
@@ -687,7 +786,7 @@ class Grace(AtomisticGenericJob):
                 h5out['forces'] = df['forces'].values
                 h5out['max_force'] = df['max_force'].values
                 h5out['stresses'] = np.array(
-                    [voigt_to_tensor(s)*160.2 for s in df['stresses'].values])
+                    [voigt_to_tensor(s)*_EV_PER_ANG3_TO_GPA for s in df['stresses'].values])
                 h5out['steps'] = df['step'].values
         elif self._generic_input['calc_mode'] == 'minimize':
             df = self._parse_calc_minimize()
