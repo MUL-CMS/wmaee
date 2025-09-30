@@ -620,7 +620,7 @@ class Grace(AtomisticGenericJob):
                 pressure /= EV_PER_ANG3_TO_GPA
             pfactor = self._generic_input["pressure_damping_timescale"]
             if not pfactor == None:
-                pfactor *= units.fs
+                pfactor = f'{pfactor}*units.fs'
             script += [
                 'from ase.md.npt import NPT',                
                 f'dyn = NPT(struct, timestep={self._generic_input["time_step"]}*units.fs, temperature_K={self._generic_input["temperature"]}, ttime={self._generic_input["temperature_damping_timescale"]}*units.fs, externalstress={pressure}, pfactor={pfactor} , mask={self._generic_input["mask"]})',
