@@ -623,7 +623,7 @@ class Grace(AtomisticGenericJob):
                 pfactor = f'{pfactor}*units.fs'
             script += [
                 'from ase.md.npt import NPT',                
-                f'dyn = NPT(struct, timestep={self._generic_input["time_step"]}*units.fs, temperature_K={self._generic_input["temperature"]}, ttime={self._generic_input["temperature_damping_timescale"]}*units.fs, externalstress={pressure}, pfactor={pfactor} , mask={self._generic_input["mask"]})',
+                f'dyn = NPT(struct, timestep={self._generic_input["time_step"]}*units.fs, temperature_K={self._generic_input["temperature"]}, ttime={self._generic_input["temperature_damping_timescale"]}*units.fs, externalstress={pressure}, pfactor={pfactor} , mask={self.input["mask"]})',
                 ]
         script += [
             f'traj = Trajectory("{self.input["trajectory"]}", "w", struct)',
