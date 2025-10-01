@@ -750,17 +750,15 @@ class Grace(AtomisticGenericJob):
             if self._generic_input['calc_mode'] == 'minimize':
                 traj_file = self.input['save_path']
                 traj = Trajectory(join(self.working_directory, traj_file))
-                include_ideal_gas = False
             else:
                 traj_file = self.input['trajectory']
                 traj = read(join(self.working_directory, traj_file), index=":")
-                include_ideal_gas = True
             try:
                 with self.project_hdf5.open('output/generic') as h5out:
                     h5out['cells'] = np.array([s.get_cell() for s in traj])
                     h5out['positions'] = np.array([s.positions for s in traj])
                     h5out['stresses'] = np.array(
-                        [voigt_to_tensor(s.get_stress(include_ideal_gas = include_ideal_gas))*EV_PER_ANG3_TO_GPA for s in traj])
+                        [voigt_to_tensor(s.get_stress())*EV_PER_ANG3_TO_GPA for s in traj])
                     h5out['forces'] = np.array([s.get_forces() for s in traj])
             except:
                 self.logger.warning(
