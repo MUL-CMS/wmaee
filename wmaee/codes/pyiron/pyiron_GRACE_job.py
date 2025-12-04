@@ -14,13 +14,13 @@ from pyiron_base import GenericParameters
 # from tensorpotential.calculator import TPCalculator
 
 
-from ase.io import write, read
 import io
 import ast
-from os.path import join
+import os
 from ase import Atoms
-from ase.constraints import ExpCellFilter
+from ase.io import write, read
 from ase.io.trajectory import Trajectory
+from ase.constraints import ExpCellFilter
 from typing import Tuple
 
 import pandas as pd
@@ -29,6 +29,13 @@ from typing import Literal, Optional
 
 from wmaee.units import EV_PER_ANG3_TO_GPA
 
+_grace_models = [
+    "GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6", "GRACE-FS-OAM",
+    "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
+    "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT",
+    "GRACE-1L-OMAT-medium-base", "GRACE-1L-OMAT-medium-ft-E", "GRACE-1L-OMAT-large-base", "GRACE-1L-OMAT-large-ft-E",
+    "GRACE-2L-OMAT-medium-base", "GRACE-2L-OMAT-medium-ft-E", "GRACE-2L-OMAT-large-base", "GRACE-2L-OMAT-large-ft-E",
+]
 
 class Grace(AtomisticGenericJob):
     """
@@ -114,38 +121,98 @@ class Grace(AtomisticGenericJob):
         """
         self._generic_input['max_iter'] = max_iter
 
+    @property
+    def model(self) -> str:
+        """
+        Return the current GRACE model.
+    
+        Returns
+        -------
+        str
+            The selected GRACE model name.
+        """
+        return self.input['model']
 
+
+    @model.setter
+    def model(self, model: str):
+        """
+        Set the GRACE model name.
+    
+        Parameters
+        ----------
+        model : str
+            Name of the GRACE model to use. Must be one of the supported
+            GRACE model identifiers:
+    
+            - "GRACE-1L-MP-r6"
+            - "GRACE-2L-MP-r5"
+            - "GRACE-2L-MP-r6"
+            - "GRACE-FS-OAM"
+            - "GRACE-1L-OAM"
+            - "GRACE-2L-OAM"
+            - "GRACE-FS-OMAT"
+            - "GRACE-1L-OMAT"
+            - "GRACE-2L-OMAT"
+            - "GRACE-1L-OMAT-medium-base"
+            - "GRACE-1L-OMAT-medium-ft-E"
+            - "GRACE-1L-OMAT-large-base"
+            - "GRACE-1L-OMAT-large-ft-E"
+            - "GRACE-2L-OMAT-medium-base"
+            - "GRACE-2L-OMAT-medium-ft-E"
+            - "GRACE-2L-OMAT-large-base"
+            - "GRACE-2L-OMAT-large-ft-E"
+    
+        Raises
+        ------
+        ValueError
+            If `model` is not a valid GRACE model identifier.
+        """
+        if model not in _grace_models:
+            raise ValueError(f"Unknown grace model: {model}")
+        self.input["model"] = model
+
+
+    def available_models(self):
+        """
+        Return the list of supported GRACE models.
+    
+        Returns
+        -------
+        list of str
+            All valid GRACE model identifiers.
+        """
+        return _grace_models
+
+    
     ####################################################
     ### --- IMPLEMENTATION OF STATIC CALCULATION --- ###
     ####################################################
     def calc_static(
         self,
-        grace_model: Literal["GRACE-1L-MP-r6", "GRACE-2L-MP-r5",
-                             "GRACE-2L-MP-r6", "GRACE-FS-OAM",
-                             "GRACE-1L-OAM", "GRACE-2L-OAM",
-                             "GRACE-FS-OMAT", "GRACE-1L-OMAT",
-                             "GRACE-2L-OMAT"] = "GRACE-2L-OMAT",
+        grace_model: Literal[*_grace_models] = "GRACE-2L-OMAT",
     ):
         """
         Perform a static calculation.
     
         Parameters
         ----------
-        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
-                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
-                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
-            The Grace model to use for the calculation. Default is "GRACE-2L-OMAT".
+        grace_model : Literal[*_grace_models], optional
+            GRACE model to use for the relaxation.  
+            Must be one of the supported models, which can be obtained via 
+            :meth:`available_models`. Default is ``"GRACE-2L-OMAT"``.
     
         Raises
         ------
         ValueError
-            If the structure is not set before calling this method.
+            If the structure has not been set before calling this method.
     
         Notes
         -----
-        This method sets up the Grace calculator with the specified model and
-        prepares the job for a static calculation. The structure must be set
-        before calling this method.
+        This method configures the GRACE calculator for a static calculation
+        using the provided GRACE model.  
+        A structure must be assigned to the instance prior to calling
+        ``calc_static``.
     
         Returns
         -------
@@ -155,7 +222,8 @@ class Grace(AtomisticGenericJob):
             raise ValueError(
                 'Structure must be set before calling calc_static().')
         self._generic_input['calc_mode'] = 'static'
-        self.input['model'] = grace_model
+        self.model = grace_model
+
         
     def _write_calc_static(self):
         """
@@ -187,7 +255,7 @@ class Grace(AtomisticGenericJob):
             '# write the final structure to a CIF file',
             'write_cif("final_structure.cif", initial_structure)',
         ]
-        with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
+        with open(os.path.join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
     def _parse_calc_static(
@@ -217,7 +285,7 @@ class Grace(AtomisticGenericJob):
 
         try:
             df = pd.read_csv(
-                join(self.working_directory, output),
+                os.path.join(self.working_directory, output),
                 sep=r"\t+", 
                 engine='python'
             )
@@ -233,21 +301,17 @@ class Grace(AtomisticGenericJob):
     ##########################################################
     ### --- IMPLEMENTATION OF MINIMIZATION CALCULATION --- ###
     ##########################################################
-
+    
     def calc_minimize(
         self,
-        grace_model: Literal[
-            "GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
-            "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
-            "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"
-        ] = "GRACE-2L-OMAT",
+        grace_model: Literal[*_grace_models] = "GRACE-2L-OMAT",
         algorithm: Literal["FIRE", "BFGS", "LBFGS"] = "FIRE",
         algorithm_kwargs: dict | None = None,
         relax_cell: bool = False,
         relax_cell_kwargs: dict | None = None,
         ionic_force_tolerance: float = 0.001,
         max_iter: int = 500,
-        n_print : int = 1,
+        n_print: int = 1,
         save_path: str | None = "relax.traj",
     ) -> None:
         """
@@ -255,32 +319,48 @@ class Grace(AtomisticGenericJob):
     
         Parameters
         ----------
-        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
-                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
-                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
-            The GRACE model to use for the calculation. Default is "GRACE-2L-OMAT".
+        grace_model : Literal[*_grace_models], optional
+            GRACE model to use for the relaxation.  
+            Must be one of the supported models, which can be obtained via 
+            :meth:`available_models`. Default is ``"GRACE-2L-OMAT"``.
+    
         algorithm : {"FIRE", "BFGS", "LBFGS"}, optional
-            Ionic relaxation algorithm from ASE. Default is "FIRE".
+            Ionic relaxation algorithm from ASE.  
+            Default is ``"FIRE"``.
+    
         algorithm_kwargs : dict, optional
-            Additional keyword arguments for the relaxation algorithm. Default is None.
+            Additional keyword arguments passed to the relaxation algorithm.  
+            Default is ``None``.
+    
         relax_cell : bool, optional
-            If True, relax the simulation cell. Default is False.
+            If ``True``, optimize the simulation cell in addition to ionic positions.  
+            Default is ``False``.
+    
         relax_cell_kwargs : dict, optional
-            Additional keyword arguments for cell relaxation. Default is None.
+            Additional keyword arguments for cell relaxation.  
+            Default is ``None``.
+    
         ionic_force_tolerance : float, optional
-            Convergence criterion for ionic forces in eV/Å. Default is 0.001.
+            Force convergence criterion in eV/Å.  
+            Default is ``0.001``.
+    
         max_iter : int, optional
-            Maximum number of optimization steps. Default is 500.
+            Maximum number of optimization steps.  
+            Default is ``500``.
+    
         n_print : int, optional
-            Frequency of logging output (structures/stresses). Default is 1.
+            Logging frequency for structures and stresses.  
+            Default is ``1``.
+    
         save_path : str or None, optional
-            File path to save the relaxation trajectory. Default is "relax.traj".
+            Path to save the relaxation trajectory.  
+            If ``None``, no trajectory is written.  
+            Default is ``"relax.traj"``.
     
         Returns
         -------
         None
         """
-
         
         super().calc_minimize(
             ionic_energy_tolerance=0,
@@ -319,7 +399,7 @@ class Grace(AtomisticGenericJob):
         algo_kwargs['trajectory'] = f"{save_path}"
         algo_kwargs['loginterval'] = self._generic_input['n_print']
         # Reformat dictionary to string
-        algo_kwargs_str = ", ".join(
+        algo_kwargs_str = ", ".os.path.join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
             for k, v in algo_kwargs.items()
         )
@@ -329,7 +409,7 @@ class Grace(AtomisticGenericJob):
         # Cell relaxation kwargs ---> see ase.constraints.ExpCellFilter
         relax_cell_kwargs = self.input.get('relax_cell_kwargs', {})
         # Reformat dictionary to string
-        relax_cell_kwargs_str = ", ".join(
+        relax_cell_kwargs_str = ", ".os.path.join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
             for k, v in relax_cell_kwargs.items()
         )
@@ -391,7 +471,7 @@ class Grace(AtomisticGenericJob):
 
         script += ['write_cif("final_structure.cif", struct)']
 
-        with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
+        with open(os.path.join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
     def _parse_calc_minimize(self, output: str = 'error.out') -> Optional[pd.DataFrame]:
@@ -416,7 +496,7 @@ class Grace(AtomisticGenericJob):
 
         try:
             # Find the header line dynamically
-            with open(join(self.working_directory, output), 'r') as f:
+            with open(os.path.join(self.working_directory, output), 'r') as f:
                 lines = f.readlines()
             for i, line in enumerate(lines):
                 if line.strip().startswith('Step'):
@@ -433,7 +513,7 @@ class Grace(AtomisticGenericJob):
                     table_lines.append(line)
 
             # Read table into DataFrame
-            table_str = ''.join(table_lines)
+            table_str = ''.os.path.join(table_lines)
             df = pd.read_csv(io.StringIO(table_str),
                              sep=r'\s+', engine='python')
 
@@ -448,11 +528,7 @@ class Grace(AtomisticGenericJob):
     ################################################
     def calc_md(
         self,
-        grace_model: Literal[
-            "GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
-            "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
-            "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"
-        ] = "GRACE-2L-OMAT",
+        grace_model: Literal[*_grace_models] = "GRACE-2L-OMAT",
         ensemble: Literal["NVT", "nvt", "Langevin", "langevin", "NPT", "npt"] = "NVT", 
         temperature: float = 300.0,
         starting_temperature: int | None = None,
@@ -472,10 +548,10 @@ class Grace(AtomisticGenericJob):
     
         Parameters
         ----------
-        grace_model : {"GRACE-1L-MP-r6", "GRACE-2L-MP-r5", "GRACE-2L-MP-r6",
-                       "GRACE-FS-OAM", "GRACE-1L-OAM", "GRACE-2L-OAM",
-                       "GRACE-FS-OMAT", "GRACE-1L-OMAT", "GRACE-2L-OMAT"}, optional
-            Choice of GrACE foundation model (default is "GRACE-2L-OMAT").
+        grace_model : Literal[*_grace_models], optional
+            GRACE model to use for the relaxation.  
+            Must be one of the supported models, which can be obtained via 
+            :meth:`available_models`. Default is ``"GRACE-2L-OMAT"``.
     
         ensemble : {"NVT", "nvt", "Langevin", "langevin", "NPT", "npt"}, optional
             Type of statistical ensemble:
@@ -638,7 +714,7 @@ class Grace(AtomisticGenericJob):
             '    values += [struct.get_temperature()]',
             '    values += [struct.get_volume()]+list(struct.cell.lengths())',
             '    values += list(struct.get_stress())',
-            '    status = "\\t".join(str(v) for v in values)',
+            '    status = "\\t".os.path.join(str(v) for v in values)',
             '    print(status)',
             '    logfile.write(status+"\\n")',
             '    logfile.flush()',
@@ -649,7 +725,7 @@ class Grace(AtomisticGenericJob):
             'write_cif("final_structure.cif", struct)'
         ]
 
-        with open(join(self.working_directory, 'calc_script.py'), 'w') as f:
+        with open(os.path.join(self.working_directory, 'calc_script.py'), 'w') as f:
             f.writelines("\n".join(script))
 
     def _parse_calc_md(self, output: str = 'md_run.log') -> Optional[pd.DataFrame]:
@@ -671,12 +747,12 @@ class Grace(AtomisticGenericJob):
         """
         try:
             # df = pd.read_csv(
-            #     join(self.working_directory, output),
+            #     os.path.join(self.working_directory, output),
             #     skiprows=1,
             #     sep=r'\s+'
             # )
             df = pd.read_csv(
-                join(self.working_directory, output),
+                os.path.join(self.working_directory, output),
                 sep=r"\t+", 
                 engine='python'
             )
@@ -700,7 +776,7 @@ class Grace(AtomisticGenericJob):
         -------
         None
         """
-        write(join(self.working_directory, 'structure.cif'),
+        write(os.path.join(self.working_directory, 'structure.cif'),
               pyiron_to_ase(self.structure))
         self.input.to_hdf(self.project_hdf5, group_name='input')
         if self._generic_input['calc_mode'] == 'static':
@@ -736,7 +812,7 @@ class Grace(AtomisticGenericJob):
             ])
 
         relaxed_ase_structure = read(
-            join(self.working_directory, 'final_structure.cif'), format='cif')
+            os.path.join(self.working_directory, 'final_structure.cif'), format='cif')
         relaxed_pyiron_structure = ase_to_pyiron(relaxed_ase_structure)
 
         # Store the relaxed structure in the HDF5 group
@@ -749,10 +825,10 @@ class Grace(AtomisticGenericJob):
             # For minimize and md, we expect a trajectory file with the relaxed structure
             if self._generic_input['calc_mode'] == 'minimize':
                 traj_file = self.input['save_path']
-                traj = Trajectory(join(self.working_directory, traj_file))
+                traj = Trajectory(os.path.join(self.working_directory, traj_file))
             else:
                 traj_file = self.input['trajectory']
-                traj = read(join(self.working_directory, traj_file), index=":")
+                traj = read(os.path.join(self.working_directory, traj_file), index=":")
             try:
                 with self.project_hdf5.open('output/generic') as h5out:
                     h5out['cells'] = np.array([s.get_cell() for s in traj])
@@ -776,6 +852,8 @@ class Grace(AtomisticGenericJob):
                 h5out['stresses'] = np.array(
                     [voigt_to_tensor(s)*EV_PER_ANG3_TO_GPA for s in df['stresses'].values])
                 h5out['steps'] = df['step'].values
+                h5out['cells'] = np.array([relaxed_pyiron_structure.get_cell()])
+                h5out['positions'] = np.array([relaxed_pyiron_structure.positions])
         elif self._generic_input['calc_mode'] == 'minimize':
             df = self._parse_calc_minimize()
             with self.project_hdf5.open('output/generic') as h5out:
@@ -793,6 +871,7 @@ class Grace(AtomisticGenericJob):
                 h5out['time'] = df['Time'].values
                 h5out['steps'] = df.index.values
 
+        self.compress()
         self.status.finished = True
 
     def get_structure(self, frame: int = -1) -> Atoms:
@@ -842,6 +921,36 @@ class Grace(AtomisticGenericJob):
         # Generate symbols list
         symbols = [species[i] for i in indices]
         return ase_to_pyiron(Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True))
+
+    def compress(self, files_to_compress=None):
+        """
+        Compress the output files of a job object.
+    
+        Args:
+            files_to_compress (list): A list of files to compress (optional)
+        """
+        import os
+        # delete empty files
+        for f in self.files.list():
+            filename = os.path.join(self.working_directory, f)
+            if (os.path.exists(filename) and os.stat(filename).st_size == 0):
+                os.remove(filename)
+        # delete slurm scripts
+        if "run_queue.sh" in self.files.list():
+            filename = os.path.join(self.working_directory, "run_queue.sh")
+            os.remove(filename)
+        # compress all remaining files
+        if files_to_compress is None:
+            files_to_compress = [
+                f
+                for f in self.files.list()
+                if f
+                not in [
+                    "final_structure.cif",
+                ]
+            ]
+        
+        super(Grace, self).compress(files_to_compress=files_to_compress)
 
 
 class CalcParams(GenericParameters):
