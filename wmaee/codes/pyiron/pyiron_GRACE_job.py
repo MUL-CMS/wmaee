@@ -399,7 +399,7 @@ class Grace(AtomisticGenericJob):
         algo_kwargs['trajectory'] = f"{save_path}"
         algo_kwargs['loginterval'] = self._generic_input['n_print']
         # Reformat dictionary to string
-        algo_kwargs_str = ", ".os.path.join(
+        algo_kwargs_str = ", ".join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
             for k, v in algo_kwargs.items()
         )
@@ -409,7 +409,7 @@ class Grace(AtomisticGenericJob):
         # Cell relaxation kwargs ---> see ase.constraints.ExpCellFilter
         relax_cell_kwargs = self.input.get('relax_cell_kwargs', {})
         # Reformat dictionary to string
-        relax_cell_kwargs_str = ", ".os.path.join(
+        relax_cell_kwargs_str = ", ".join(
             f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
             for k, v in relax_cell_kwargs.items()
         )
@@ -513,7 +513,7 @@ class Grace(AtomisticGenericJob):
                     table_lines.append(line)
 
             # Read table into DataFrame
-            table_str = ''.os.path.join(table_lines)
+            table_str = ''.join(table_lines)
             df = pd.read_csv(io.StringIO(table_str),
                              sep=r'\s+', engine='python')
 
@@ -714,7 +714,7 @@ class Grace(AtomisticGenericJob):
             '    values += [struct.get_temperature()]',
             '    values += [struct.get_volume()]+list(struct.cell.lengths())',
             '    values += list(struct.get_stress())',
-            '    status = "\\t".os.path.join(str(v) for v in values)',
+            '    status = "\\t".join(str(v) for v in values)',
             '    print(status)',
             '    logfile.write(status+"\\n")',
             '    logfile.flush()',
