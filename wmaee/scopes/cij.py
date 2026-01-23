@@ -339,3 +339,49 @@ def project_hexagonal(cij: NDArray) -> NDArray:
             projected_cij[i, j] /= 2
 
     return projected_cij
+
+
+
+###############################################################################################################
+# LEFT OVER CODE FROM THE PAST, PERHAPS REIMPLEMENT IN SOME FORM??? ---> move to scopes.cij?
+    
+#     def read_data_from_VASP_Cij_calculation(self, case,
+#                                             path_to_CONTCAR = ['V=eq', 'CONTCAR'],
+#                                             path_to_Cij = ['Cij', 'eps=0.014', 'Cij_cubic.dat']):
+#         """
+#         Reads and processes the data needed for Debye model.
+
+#         Arguments:
+#         case   path to the folder containing <eq> and <Cij/eps=0.014> folders
+#         """
+
+#         from pymatgen.io.vasp import Poscar, Oszicar
+#         from pymatgen.core.periodic_table import Element
+#         from os.path import join
+#         from numpy import loadtxt
+#         from numpy.linalg import inv
+
+#         struct = Poscar.from_file(join(case, *path_to_CONTCAR)).structure
+#         self.data['V'] = struct.volume/struct.num_sites
+#         E0 = Oszicar(join(case, *path_to_CONTCAR[:-1], 'OSZICAR')).final_energy
+#         self.data['E0'] = E0/struct.num_sites
+#         self.struct = struct
+        
+#         Cij = loadtxt(join(case, *path_to_Cij))
+#         Sij = inv(Cij)
+# #         https://wiki.materialsproject.org/Elasticity_calculations
+#         BV = sum([sum([Cij[i][j] for j in range(3)]) for i in range(3)])/9
+#         BR = 1/sum([sum([Sij[i][j] for j in range(3)]) for i in range(3)])
+#         BH = 0.5*(BV+BR)
+#         GV = (sum(Cij[i][i] for i in range(3)) + sum(3*Cij[i][i] for i in range(3, 6)) - (Cij[0][1]+Cij[1][2]+Cij[0][2]))/15
+#         GR = 15/(4*sum(Sij[i][i] for i in range(3)) + sum(3*Sij[i][i] for i in range(3, 6)) - 4*(Sij[0][1]+Sij[1][2]+Sij[0][2]))
+#         GH = 0.5*(GV+GR)
+#         self.data['B'] = BH
+#         self.data['nu'] = (3*BH-2*GH)/(6*BH+2*GH)
+        
+            
+#         M = sum([Element[s.species_string].data['Atomic mass'] for s in struct.sites])
+#         # atomic mass unit -> g:  u = 1.66054e-24 g
+#         # volume: Ang^3 = 1e-30 m^3 = 1e-24 cm^3
+#         self.data['rho'] = 1.66054*M/struct.volume
+###############################################################################################################
